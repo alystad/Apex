@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "momentum-v1",
+  "_comment": "MOMENTUM ONLY. Answers 'how hot/cold is this player right now', signed -5..+5, centred at 0. Fully independent of Impact Rating (winImpactWeights.json) - no value here feeds Impact and vice versa. Tune freely without code changes.",
+  "windowSec": 180,
+  "range": 5,
+  "normalizationScale": 8,
+  "_comment_streak": "Hot-hand mechanic (Momentum only). Made FG steps up, missed FG/turnover steps down, clamped to [min,max], reset to `start` whenever the rolling window empties.",
+  "streak": {
+    "start": 1.0,
+    "madeStep": 0.15,
+    "missStep": 0.25,
+    "min": 0.5,
+    "max": 2.0
+  },
+  "_comment_clutch": "Same 1.6x / same conditions as Impact's clutch, but kept as its own block so the metrics never share constants.",
+  "clutch": {
+    "multiplier": 1.6,
+    "clockSec": 300,
+    "marginMax": 8
+  },
+  "_comment_eventImpacts": "Base per-event values before streak and clutch multipliers. madeFt/missedFt are not in the core spec; small streak-neutral values so free throws still register.",
+  "eventImpacts": {
+    "made2pt": 2.0,
+    "made3pt": 3.2,
+    "missedShot": -1.2,
+    "turnover": -2.5,
+    "steal": 1.8,
+    "block": 1.5,
+    "assist": 1.0,
+    "offRebound": 0.8,
+    "defRebound": 0.5,
+    "foul": -0.5,
+    "madeFt": 0.8,
+    "missedFt": -0.6
+  }
+}

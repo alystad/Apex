@@ -31,7 +31,25 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
+!.env.example
 .env*.local
+
+# generated verification bundles
+dist-check*/
+
+# local recovery artifacts
+recovered_candidates/
+recovery_from_git_blobs/
+restored_from_vscode_history.csv
+.claude/
+
+# local API runtime data and logs
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+apps/api/tmp-*.txt
 
 # typescript
 *.tsbuildinfo
