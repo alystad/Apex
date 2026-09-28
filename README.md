@@ -38,8 +38,8 @@ The project currently focuses on college basketball and baseball, with additiona
 ### Install
 
 ```bash
-git clone https://github.com/alexlystad/college-sports-app.git
-cd college-sports-app
+git clone https://github.com/alexlystad/college-basketball-app.git
+cd college-basketball-app
 npm install
 ```
 
