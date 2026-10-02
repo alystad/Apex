@@ -3767,6 +3767,7 @@ export default function LiveGamesScreen() {
       gamesDateKey,
       headerHeight,
       mode,
+      proLeague,
       error,
       loading,
       loadLeaderboardPlayers,
