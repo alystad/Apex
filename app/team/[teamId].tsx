@@ -468,7 +468,7 @@ export default function TeamProfileScreen() {
         }
       }
     },
-    [endTask, mode, startTask, teamId],
+    [endTask, mode, proLeague, startTask, teamId],
   );
 
   useEffect(() => {
