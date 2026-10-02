@@ -2,6 +2,10 @@ import { fetchLiveGamePayload } from "@/src/features/basketball/api";
 import {
   buildPredictionSnapshotFromSummaryPayload,
 } from "@/src/profile/predictionResolution";
+import {
+  DEFAULT_PRO_BASKETBALL_LEAGUE,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import type {
   GamePrediction,
   PredictionGameSnapshot,
@@ -9,6 +13,7 @@ import type {
 
 export async function refreshPredictionSnapshots(
   predictions: GamePrediction[],
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<PredictionGameSnapshot[]> {
   const uniqueGameIds = [
     ...new Set(
@@ -20,7 +25,7 @@ export async function refreshPredictionSnapshots(
     uniqueGameIds.map(async (key) => {
       const [mode, gameId] = key.split(":");
       const resolvedMode = mode === "nba" ? "nba" : "college";
-      const payload = await fetchLiveGamePayload(resolvedMode, gameId);
+      const payload = await fetchLiveGamePayload(resolvedMode, gameId, proLeague);
       return buildPredictionSnapshotFromSummaryPayload(
         resolvedMode,
         gameId,
