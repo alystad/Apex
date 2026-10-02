@@ -1105,6 +1105,31 @@ function makeStyles(theme: ThemeTokens) {
       paddingTop: 0,
       paddingBottom: 0,
     },
+    proLeagueToggle: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing[16],
+      paddingHorizontal: theme.spacing[4],
+      paddingTop: theme.spacing[2],
+    },
+    proLeagueToggleOption: {
+      minHeight: 30,
+      justifyContent: "center",
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+    },
+    proLeagueToggleOptionActive: {
+      borderBottomColor: theme.colors.accentStrong,
+    },
+    proLeagueToggleText: {
+      fontSize: 13,
+      lineHeight: 16,
+      fontWeight: "700",
+      color: theme.colors.textMuted,
+    },
+    proLeagueToggleTextActive: {
+      color: theme.colors.textPrimary,
+    },
     previewCardPressable: {
       borderRadius: theme.radius.lg,
     },
@@ -1841,6 +1866,20 @@ export default function LiveGamesScreen() {
     liveDataDelayRef.current = settingsState.inGame.liveDataDelaySeconds;
   }, [settingsState.inGame.liveDataDelaySeconds]);
   useEffect(() => {
+    if (mode !== "nba") {
+      return;
+    }
+    setGames([]);
+    setGamesDateKey(null);
+    setDateGameCounts({});
+    topEdgeGamesCacheRef.current.clear();
+    leaderboardGameCacheRef.current.clear();
+    leaderboardRosterCacheRef.current.clear();
+    leaderboardLogoCacheRef.current.clear();
+    leaderboardSeasonInputCacheRef.current.clear();
+    leaderboardSeasonPowerCacheRef.current.clear();
+  }, [mode, proLeague]);
+  useEffect(() => {
     return () => {
       leaderboardDelayTimersRef.current.forEach((timer) => clearTimeout(timer));
       leaderboardDelayTimersRef.current = [];
@@ -2489,7 +2528,7 @@ export default function LiveGamesScreen() {
         if (item.key === selectedDateKey) {
           return true;
         }
-        const count = dateGameCounts[`${mode}:${item.key}`];
+        const count = dateGameCounts[`${modeDataScope(mode, proLeague)}:${item.key}`];
         return typeof count !== "number" || count > 0;
       }),
     [dateRail, dateGameCounts, mode, proLeague, selectedDateKey],
@@ -2527,7 +2566,7 @@ export default function LiveGamesScreen() {
     }
     for (let index = todayIndex; index < dateRail.length; index += 1) {
       const key = dateRail[index].key;
-      const count = dateGameCounts[`${mode}:${key}`];
+      const count = dateGameCounts[`${modeDataScope(mode, proLeague)}:${key}`];
       if (typeof count === "number" && count > 0) {
         return key;
       }
@@ -2678,7 +2717,7 @@ export default function LiveGamesScreen() {
 
       return nextPlayers;
     },
-    [mode, showFavoritesOnly],
+    [mode, proLeague, showFavoritesOnly],
   );
   const getTopEdgeGamesForDate = useCallback(
     async (targetMode: GameMode, dateKey: string) => {
@@ -3121,11 +3160,8 @@ export default function LiveGamesScreen() {
   const renderGameGroupItem = useCallback<ListRenderItem<MatchListGroup>>(
     ({ item: group }) => {
       const isCollapsed = collapsedMatchGroups[group.key] ?? false;
-      // "nba" mode is currently pointed at WNBA data (see PRO_BASKETBALL_LABEL
-      // in src/features/nba/proBasketballLeague.ts) — for that league
-      // specifically, skip the collapsible section header/toggle entirely
-      // and just show the games directly. Other leagues (college, baseball)
-      // keep the existing collapsible-group behavior untouched.
+      // WNBA keeps the existing direct-list treatment. NBA and the college/
+      // baseball modes keep the collapsible-group behavior.
       const isWnba = mode === "nba" && proLeague === "wnba";
 
       const gamesList = (
@@ -3354,7 +3390,7 @@ export default function LiveGamesScreen() {
     ({ item: favorite }) => {
       const snapshot = favorite.snapshot;
       const metaParts = [
-        modeLabel(favorite.mode),
+        modeLabel(favorite.mode, proLeague),
         snapshot?.venue || (snapshot?.sport === "baseball" ? "Ballpark" : "Arena"),
         formatFavoriteStartDate(snapshot?.startDateTime),
       ].filter(Boolean);
@@ -3952,6 +3988,36 @@ export default function LiveGamesScreen() {
 
               {!showFavoritesOnly ? (
                 <>
+                  {mode === "nba" ? (
+                    <View style={styles.proLeagueToggle}>
+                      {(["nba", "wnba"] as const).map((league) => {
+                        const active = proLeague === league;
+                        return (
+                          <Pressable
+                            key={league}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            accessibilityLabel={`Show ${getProBasketballLeagueConfig(league).label} games`}
+                            onPress={() => setProLeague(league)}
+                            style={[
+                              styles.proLeagueToggleOption,
+                              active ? styles.proLeagueToggleOptionActive : null,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.proLeagueToggleText,
+                                active ? styles.proLeagueToggleTextActive : null,
+                              ]}
+                            >
+                              {getProBasketballLeagueConfig(league).label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
                   <View style={styles.dateSliderWrap}>
                     <TabBar
                       items={dateTabItems}
@@ -4245,7 +4311,7 @@ export default function LiveGamesScreen() {
                       {topEdgeSort === "fairProb" ? "Fair Win %" : "Pro EV"}
                     </Text>
                     <Text style={styles.modalSubtitle}>
-                      Highest ranked {topEdgeSort === "fairProb" ? "fair win probability" : "edges"} across {PRO_BASKETBALL_LABEL} and college basketball on {formattedDateLabel}.
+                      Highest ranked {topEdgeSort === "fairProb" ? "fair win probability" : "edges"} across {getProBasketballLeagueConfig(proLeague).label} and college basketball on {formattedDateLabel}.
                     </Text>
                     <View style={styles.topEdgeFilterRow}>
                       {([
