@@ -5,7 +5,8 @@ import { useMemo } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import GlassPillButton from "@/components/GlassPillButton";
-import { PRO_BASKETBALL_LABEL } from "@/src/features/nba/proBasketballLeague";
+import { useLiveGame } from "@/hooks/useLiveGame";
+import { getProBasketballLeagueConfig } from "@/src/features/nba/proBasketballLeague";
 import { useGameModeActions } from "@/src/mode/GameModeContext";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 import { useAppTheme } from "@/src/theme/useAppTheme";
@@ -33,6 +34,7 @@ export default function FloatingTeamSearchButton({
 }: FloatingTeamSearchButtonProps) {
   const { tokens: theme } = useAppTheme();
   const { setMode } = useGameModeActions();
+  const { proLeague } = useLiveGame();
   const searchButtonSize = 60;
   const companionPillHeight = 60;
   const companionGap = theme.spacing[10];
@@ -116,7 +118,7 @@ export default function FloatingTeamSearchButton({
     resolvedBottomOffset + (searchButtonSize - companionPillHeight) / 2;
   const companionIcons = [
     { icon: "football", label: "Football", mode: "college" as const, solid: false },
-    { icon: "basketball", label: PRO_BASKETBALL_LABEL, mode: "nba" as const, solid: false },
+    { icon: "basketball", label: getProBasketballLeagueConfig(proLeague).label, mode: "nba" as const, solid: false },
     { icon: "baseball", label: "Baseball", mode: "baseball" as const, solid: false },
     { icon: "star", label: "Favorites", mode: null, solid: true },
   ] as const;
