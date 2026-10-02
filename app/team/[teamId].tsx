@@ -320,8 +320,9 @@ export default function TeamProfileScreen() {
         teamId: teamId ?? "unknown",
         season: DEFAULT_SEASON,
         mode,
+        proLeague: mode === "nba" ? proLeague : undefined,
       }),
-    [mode, teamId],
+    [mode, proLeague, teamId],
   );
   const screenLoading = useScreenLoading(screenKey);
   const isFavoritedTeam = Boolean(teamId && profileState.profile.favoriteTeamId === teamId);
@@ -497,7 +498,7 @@ export default function TeamProfileScreen() {
 
   useEffect(() => {
     setActiveTab("overview");
-  }, [mode, teamId]);
+  }, [mode, proLeague, teamId]);
 
   const upcomingGames = useMemo(() => {
     const real = getUpcomingGames(games);
