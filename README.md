@@ -1,6 +1,6 @@
-# College Basketball App
+# Apex
 
-College Basketball App is a cross-platform sports companion built with Expo and React Native. It brings live scores, game context, player and team analysis, configurable in-game views, and experimental fan features into one mobile-first experience.
+Apex is a cross-platform sports companion built with Expo and React Native. It brings live scores, game context, player and team analysis, configurable in-game views, and experimental fan features into one mobile-first experience.
 
 The project currently focuses on college basketball and baseball, with additional professional basketball data and a WNBA practice-currency player market.
 
