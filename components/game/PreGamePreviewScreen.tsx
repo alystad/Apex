@@ -20,13 +20,19 @@ import {
   teamShortLabel,
 } from "@/components/game/preview/previewShared";
 import Card from "@/components/ui/Card";
-import { type LiveGameData, type LiveGamePlayer, type LiveGameTeam } from "@/hooks/useLiveGame";
+import {
+  useLiveGame,
+  type LiveGameData,
+  type LiveGamePlayer,
+  type LiveGameTeam,
+} from "@/hooks/useLiveGame";
 import {
   getTeamGames,
   getTeamPlayerStats,
   type TeamGame,
   type TeamPlayerStats,
 } from "@/src/features/basketball/teamApi";
+import type { ProBasketballLeague } from "@/src/features/nba/proBasketballLeague";
 import type { GamePrediction, PredictionGameSnapshot } from "@/src/profile/profileTypes";
 import { useAppTheme } from "@/src/theme/useAppTheme";
 import type { ThemeTokens } from "@/src/theme/tokens";
@@ -83,6 +89,7 @@ export default function PreGamePreviewScreen({
   onSavePrediction,
   onMeetingPress,
 }: PreGamePreviewScreenProps) {
+  const { proLeague } = useLiveGame();
   const { tokens: theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const teams = data.teams ?? [];
@@ -117,7 +124,7 @@ export default function PreGamePreviewScreen({
 
   useEffect(() => {
     let cancelled = false;
-    const previewKey = `${data.mode}:${data.eventId}`;
+    const previewKey = `${data.mode === "nba" ? `${data.mode}:${proLeague}` : data.mode}:${data.eventId}`;
 
     if (loadedPreviewKeyRef.current === previewKey) {
       setLoadingPreview(false);
@@ -131,11 +138,19 @@ export default function PreGamePreviewScreen({
 
       const [awayGamesR, homeGamesR, awayStatsR, homeStatsR, h2hR] =
         await Promise.allSettled([
-          away?.id ? getTeamGames(data.mode, away.id, season, 0, 50) : Promise.resolve(emptyPage),
-          home?.id ? getTeamGames(data.mode, home.id, season, 0, 50) : Promise.resolve(emptyPage),
-          away?.id ? getTeamPlayerStats(data.mode, away.id, season) : Promise.resolve([] as TeamPlayerStats[]),
-          home?.id ? getTeamPlayerStats(data.mode, home.id, season) : Promise.resolve([] as TeamPlayerStats[]),
-          buildH2H(data.mode, away, home, season),
+          away?.id
+            ? getTeamGames(data.mode, away.id, season, 0, 50, "all", "", proLeague)
+            : Promise.resolve(emptyPage),
+          home?.id
+            ? getTeamGames(data.mode, home.id, season, 0, 50, "all", "", proLeague)
+            : Promise.resolve(emptyPage),
+          away?.id
+            ? getTeamPlayerStats(data.mode, away.id, season, proLeague)
+            : Promise.resolve([] as TeamPlayerStats[]),
+          home?.id
+            ? getTeamPlayerStats(data.mode, home.id, season, proLeague)
+            : Promise.resolve([] as TeamPlayerStats[]),
+          buildH2H(data.mode, proLeague, away, home, season),
         ]);
 
       if (cancelled) {
@@ -154,10 +169,10 @@ export default function PreGamePreviewScreen({
       if ((awayStats.length === 0 || homeStats.length === 0) && (away?.id || home?.id)) {
         const [awayFallback, homeFallback] = await Promise.all([
           awayStats.length === 0 && away?.id
-            ? getTeamPlayerStats(data.mode, away.id, season - 1).catch(() => [] as TeamPlayerStats[])
+            ? getTeamPlayerStats(data.mode, away.id, season - 1, proLeague).catch(() => [] as TeamPlayerStats[])
             : Promise.resolve(awayStats),
           homeStats.length === 0 && home?.id
-            ? getTeamPlayerStats(data.mode, home.id, season - 1).catch(() => [] as TeamPlayerStats[])
+            ? getTeamPlayerStats(data.mode, home.id, season - 1, proLeague).catch(() => [] as TeamPlayerStats[])
             : Promise.resolve(homeStats),
         ]);
         awayStats = awayFallback;
@@ -223,7 +238,7 @@ export default function PreGamePreviewScreen({
     return () => {
       cancelled = true;
     };
-  }, [away, data.eventId, data.meta.startDateTime, data.mode, home]);
+  }, [away, data.eventId, data.meta.startDateTime, data.mode, home, proLeague]);
 
   const insightGroups = [
     { team: away, list: previewState.insights.away },
@@ -666,6 +681,7 @@ function buildRatingLeaderFromLivePlayers(players: LiveGamePlayer[]): LeaderEntr
 
 async function buildH2H(
   mode: LiveGameData["mode"],
+  proLeague: ProBasketballLeague,
   awayTeam: LiveGameTeam | undefined,
   homeTeam: LiveGameTeam | undefined,
   currentSeason: number,
@@ -679,7 +695,9 @@ async function buildH2H(
     (_, index) => currentSeason - index,
   );
   const results = await Promise.allSettled(
-    seasons.map((season) => getTeamGames(mode, awayTeam.id, season, 0, 100)),
+    seasons.map((season) =>
+      getTeamGames(mode, awayTeam.id, season, 0, 100, "all", "", proLeague),
+    ),
   );
 
   // Games are from the AWAY team's log, so teamScore = away pts, opponentScore =
