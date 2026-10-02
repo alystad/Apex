@@ -17,7 +17,7 @@ export const PRO_BASKETBALL_LEAGUES: Record<
     label: "NBA",
     espnLeaguePath: "basketball/nba",
     fallbackTeamName: "NBA Team",
-    defaultGameId: "401766128",
+    defaultGameId: "401811003",
   },
   wnba: {
     label: "WNBA",
