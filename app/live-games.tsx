@@ -2000,7 +2000,6 @@ export default function LiveGamesScreen() {
         conferenceState.selectedConferenceKey,
         conferenceState.selectedConferenceLabel,
         mode,
-        proLeague,
       );
     },
     [
