@@ -19,7 +19,10 @@ import {
 } from "@/src/features/basketball/api";
 import type { LiveGameListItem } from "@/src/features/cbb/api";
 import { getApiBaseUrl } from "@/src/config/api";
-import { STOCK_MARKET_MODE } from "@/src/features/stockmarket/stockUniverse";
+import {
+  STOCK_MARKET_MODE,
+  STOCK_MARKET_PRO_LEAGUE,
+} from "@/src/features/stockmarket/stockUniverse";
 import type {
   StockGameState,
   StockPlayerGame,
@@ -130,7 +133,7 @@ async function buildGameData(
   gameId: string,
   caches: LiveQuoteCaches,
 ): Promise<LiveGameData | null> {
-  const payload = await fetchLiveGamePayload(STOCK_MARKET_MODE, gameId);
+  const payload = await fetchLiveGamePayload(STOCK_MARKET_MODE, gameId, STOCK_MARKET_PRO_LEAGUE);
   const built = await buildLiveGameDataFromPayload({
     // WNBA payloads come straight from ESPN (see fetchNbaLiveGamePayload), so
     // the local API server isn't required here — `apiBase` only feeds a debug
@@ -138,6 +141,7 @@ async function buildGameData(
     apiBase: getApiBaseUrl() ?? "",
     gameId,
     mode: STOCK_MARKET_MODE,
+    proLeague: STOCK_MARKET_PRO_LEAGUE,
     payload,
     rosterCache: caches.roster,
     logoCache: caches.logo,
@@ -179,7 +183,7 @@ function collectPlayers(
 export async function loadLiveSlateSnapshot(
   caches: LiveQuoteCaches,
 ): Promise<LiveSlateSnapshot> {
-  const slate = await fetchLiveGames(STOCK_MARKET_MODE);
+  const slate = await fetchLiveGames(STOCK_MARKET_MODE, STOCK_MARKET_PRO_LEAGUE);
   const byPlayerId = new Map<string, LivePlayerQuote>();
   const gamesByTeamId = new Map<string, StockPlayerGame>();
   const games: StockPlayerGame[] = [];
@@ -260,7 +264,7 @@ export async function loadFinalGameQuote(
   gameId: string,
   playerId: string,
 ): Promise<{ rating: number | null; price: number | null; isFinal: boolean } | null> {
-  const data = await getHydratedHistoricalLiveGameData(STOCK_MARKET_MODE, gameId);
+  const data = await getHydratedHistoricalLiveGameData(STOCK_MARKET_MODE, gameId, STOCK_MARKET_PRO_LEAGUE);
   if (!data) {
     return null;
   }
