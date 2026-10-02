@@ -236,7 +236,7 @@ export default function CommentsTab() {
         }
       }
     },
-    [applyComments, gameId],
+    [applyComments, gameId, mode, proLeague],
   );
 
   useEffect(() => {
