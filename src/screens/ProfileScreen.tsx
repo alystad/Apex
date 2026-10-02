@@ -18,6 +18,7 @@ import ProfileHeaderCard from "@/components/profile/ProfileHeaderCard";
 import Card from "@/components/ui/Card";
 import SectionHeader from "@/components/ui/SectionHeader";
 import TabBar, { type TabItem } from "@/components/ui/TabBar";
+import { useLiveGame } from "@/hooks/useLiveGame";
 import { useProfile } from "@/src/profile/ProfileContext";
 import { refreshPredictionSnapshots } from "@/src/profile/profileSync";
 import {
@@ -157,6 +158,7 @@ function filterPredictions(
 export default function ProfileScreen() {
   const router = useRouter();
   const { tokens: theme } = useAppTheme();
+  const { proLeague } = useLiveGame();
 const styles = useMemo(() => makeStyles(theme), [theme]);
   const {
     state,
@@ -203,7 +205,7 @@ const styles = useMemo(() => makeStyles(theme), [theme]);
         }
         setSyncing(true);
         try {
-          const snapshots = await refreshPredictionSnapshots(syncTargets);
+          const snapshots = await refreshPredictionSnapshots(syncTargets, proLeague);
           if (active && snapshots.length > 0) {
             syncPredictionsFromSnapshots(snapshots);
           }
@@ -393,7 +395,7 @@ const styles = useMemo(() => makeStyles(theme), [theme]);
             onRefresh={async () => {
               setSyncing(true);
               try {
-                const snapshots = await refreshPredictionSnapshots(syncTargets);
+                const snapshots = await refreshPredictionSnapshots(syncTargets, proLeague);
                 syncPredictionsFromSnapshots(snapshots);
               } finally {
                 setSyncing(false);
