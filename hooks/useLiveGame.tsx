@@ -81,6 +81,14 @@ function getDefaultGameId(
     ? getProBasketballLeagueConfig(proLeague).defaultGameId
     : DEFAULT_GAME_ID_BY_NON_PRO_MODE[mode];
 }
+
+function getLiveGameCacheId(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  gameId: string,
+): string {
+  return mode === 'nba' ? `${proLeague}:${gameId}` : gameId;
+}
 const POLL_INTERVAL_MS = 5000;
 // How long with no successfully-completed poll before the UI is told
 // polling looks stale (see the watchdog effect in LiveGameProvider).
@@ -3953,7 +3961,7 @@ export async function getHydratedHistoricalLiveGameData(
   gameId: string,
   proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<LiveGameData | null> {
-  const cached = await getCachedLiveGame<LiveGameData>(gameId, mode);
+  const cached = await getCachedLiveGame<LiveGameData>(getLiveGameCacheId(mode, proLeague, gameId), mode);
   if (cached?.data) {
     return cached.data.mode ? cached.data : { ...cached.data, mode };
   }
@@ -3983,7 +3991,7 @@ export async function getHydratedHistoricalLiveGameData(
       return null;
     }
 
-    await setCachedLiveGame(gameId, built.data, mode);
+    await setCachedLiveGame(getLiveGameCacheId(mode, proLeague, gameId), built.data, mode);
     return built.data;
   } catch {
     return null;
@@ -5149,7 +5157,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     const loadCached = async () => {
-      const cached = await getCachedLiveGame<LiveGameData>(gameId, mode);
+      const cached = await getCachedLiveGame<LiveGameData>(getLiveGameCacheId(mode, proLeague, gameId), mode);
       if (!mounted || !cached) {
         return;
       }
@@ -5319,7 +5327,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
           publishLiveData(withRatings, fetchedAtIso);
         }
 
-        await setCachedLiveGame(gameId, withRatings, mode);
+        await setCachedLiveGame(getLiveGameCacheId(mode, proLeague, gameId), withRatings, mode);
         setIsOffline(false);
         setIsFromCache(false);
         lastSuccessfulPollAtRef.current = Date.now();
@@ -5382,7 +5390,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
         publishLiveData(withRatings, fetchedAtIso);
       }
 
-      await setCachedLiveGame(gameId, withRatings, mode);
+      await setCachedLiveGame(getLiveGameCacheId(mode, proLeague, gameId), withRatings, mode);
       setIsOffline(false);
       setIsFromCache(false);
       lastSuccessfulPollAtRef.current = Date.now();
