@@ -1,15 +1,20 @@
 import type { TabItem } from "@/components/ui/TabBar";
-import { PRO_BASKETBALL_LABEL } from "@/src/features/nba/proBasketballLeague";
+import {
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 
 export type SportsSectionTabKey = GameMode | "multiview";
 
 type BuildSportsSectionTabItemsInput = {
+  proLeague: ProBasketballLeague;
   onSelectMode: (mode: GameMode) => void;
   onOpenMultiView: () => void;
 };
 
 export function buildSportsSectionTabItems({
+  proLeague,
   onSelectMode,
   onOpenMultiView,
 }: BuildSportsSectionTabItemsInput): TabItem[] {
@@ -26,7 +31,7 @@ export function buildSportsSectionTabItems({
     },
     {
       key: "nba",
-      label: PRO_BASKETBALL_LABEL,
+      label: getProBasketballLeagueConfig(proLeague).label,
       onPress: () => onSelectMode("nba"),
     },
     {
