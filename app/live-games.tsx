@@ -3380,6 +3380,7 @@ export default function LiveGamesScreen() {
       collapsedMatchGroups,
       mode,
       openGame,
+      proLeague,
       styles,
       theme.colors.textMuted,
       theme.colors.textPrimary,
@@ -3435,7 +3436,7 @@ export default function LiveGamesScreen() {
         </MatchGameCardPressable>
       );
     },
-    [openFavoriteGame, styles],
+    [openFavoriteGame, proLeague, styles],
   );
 
   const renderEvItem = useCallback<ListRenderItem<TopMarketEvItem>>(
@@ -3634,6 +3635,7 @@ export default function LiveGamesScreen() {
         activeConferenceKey,
         activeConferenceOption?.label,
         mode,
+        proLeague,
       );
       const isBaseballMode = mode === "baseball";
       const isAllConference = activeConferenceKey === ALL_CONFERENCE_KEY;
