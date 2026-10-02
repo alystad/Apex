@@ -18,6 +18,10 @@ import {
   getTeamSummary as getCollegeTeamSummary,
   searchTeams as searchCollegeTeams,
 } from "@/src/features/cbb/teamApi";
+import {
+  DEFAULT_PRO_BASKETBALL_LEAGUE,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 import {
   getCollegeBaseballGames,
@@ -54,9 +58,10 @@ export async function getTeamSummary(
   mode: GameMode,
   teamId: string,
   season: number,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamSummary> {
   if (mode === "nba") {
-    return getNbaTeamSummary(teamId, season);
+    return getNbaTeamSummary(proLeague, teamId, season);
   }
   if (mode === "baseball") {
     return getCollegeBaseballSummary(teamId, season);
@@ -72,9 +77,10 @@ export async function getTeamGames(
   pageSize = 20,
   competition = "all",
   search = "",
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamGamesPage> {
   if (mode === "nba") {
-    return getNbaTeamGames(teamId, season, page, pageSize, competition, search);
+    return getNbaTeamGames(proLeague, teamId, season, page, pageSize, competition, search);
   }
   if (mode === "baseball") {
     return getCollegeBaseballGames(teamId, season, page, pageSize, competition, search);
@@ -86,9 +92,10 @@ export async function getTeamRoster(
   mode: GameMode,
   teamId: string,
   season: number,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamRosterPlayer[]> {
   if (mode === "nba") {
-    return getNbaTeamRoster(teamId, season);
+    return getNbaTeamRoster(proLeague, teamId, season);
   }
   if (mode === "baseball") {
     return getCollegeBaseballRoster(teamId, season);
@@ -100,9 +107,10 @@ export async function getTeamPlayerStats(
   mode: GameMode,
   teamId: string,
   season: number,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamPlayerStats[]> {
   if (mode === "nba") {
-    return getNbaTeamPlayerStats(teamId, season);
+    return getNbaTeamPlayerStats(proLeague, teamId, season);
   }
   if (mode === "baseball") {
     return getCollegeBaseballPlayerStats(teamId, season);
@@ -114,9 +122,10 @@ export async function getTeamRatingsTimeline(
   mode: GameMode,
   teamId: string,
   season: number,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamRatingsTimeline> {
   if (mode === "nba") {
-    return getNbaTeamRatingsTimeline(teamId, season);
+    return getNbaTeamRatingsTimeline(proLeague, teamId, season);
   }
   if (mode === "baseball") {
     return getCollegeBaseballRatingsTimeline(teamId, season);
@@ -128,9 +137,10 @@ export async function getTeamStats(
   mode: GameMode,
   teamId: string,
   season: number,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamStatRow[]> {
   if (mode === "nba") {
-    return getNbaTeamStats(teamId, season);
+    return getNbaTeamStats(proLeague, teamId, season);
   }
   if (mode === "baseball") {
     return getCollegeBaseballStats(teamId, season);
@@ -142,9 +152,10 @@ export async function searchTeams(
   mode: GameMode,
   query: string,
   limit = 20,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamSearchResult[]> {
   if (mode === "nba") {
-    return searchNbaTeams(query, limit);
+    return searchNbaTeams(proLeague, query, limit);
   }
   if (mode === "baseball") {
     return searchCollegeBaseballTeams(query, limit);
