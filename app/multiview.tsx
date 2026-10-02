@@ -113,7 +113,7 @@ export default function MultiViewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setMode } = useGameMode();
-  const { setGameId } = useLiveGame();
+  const { proLeague, setGameId } = useLiveGame();
   const multiviewInGameRoute = "/(tabs)/live" as const;
   const { tokens: theme } = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -127,6 +127,7 @@ export default function MultiViewScreen() {
   const modeTabItems = useMemo(
     () =>
       buildSportsSectionTabItems({
+        proLeague,
         onSelectMode: (nextMode) => {
           setMode(nextMode);
           setLastEntrySource("normal");
@@ -134,7 +135,7 @@ export default function MultiViewScreen() {
         },
         onOpenMultiView: () => {},
       }),
-    [router, setLastEntrySource, setMode],
+    [proLeague, router, setLastEntrySource, setMode],
   );
 
   const orderedGames = useMemo(
