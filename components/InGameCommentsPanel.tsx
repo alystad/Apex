@@ -291,7 +291,7 @@ export default function InGameCommentsPanel({
         }
       }
     },
-    [applyComments, gameId],
+    [applyComments, gameId, mode, proLeague],
   );
 
   useEffect(() => {
