@@ -4974,7 +4974,10 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [isFromCache, setIsFromCache] = useState(false);
-  const [gameId, setGameIdState] = useState(DEFAULT_GAME_ID_BY_MODE.college);
+  const [proLeague, setProLeagueState] = useState<ProBasketballLeague>(
+    DEFAULT_PRO_BASKETBALL_LEAGUE,
+  );
+  const [gameId, setGameIdState] = useState(DEFAULT_GAME_ID_BY_NON_PRO_MODE.college);
   const [data, setData] = useState<LiveGameData | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [syncCalibrationPlays, setSyncCalibrationPlays] = useState<
@@ -4986,7 +4989,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
   // "reconnecting" signal rather than silently going stale with no feedback.
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [debug, setDebug] = useState<LiveGameDebug>({
-    url: `${mode}:${DEFAULT_GAME_ID_BY_MODE[mode]}`,
+    url: `${mode}:${getDefaultGameId(mode, DEFAULT_PRO_BASKETBALL_LEAGUE)}`,
     lastStatus: null,
     parsedCounts: {},
   });
@@ -5068,11 +5071,32 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
     setGameIdState(nextGameId);
   }, [gameId, mode, setMode]);
 
+  const setProLeague = useCallback(
+    (nextLeague: ProBasketballLeague) => {
+      if (nextLeague === proLeague) {
+        return;
+      }
+      setProLeagueState(nextLeague);
+      if (mode === 'nba') {
+        setGameIdState(getDefaultGameId('nba', nextLeague));
+      }
+    },
+    [mode, proLeague],
+  );
+
   useEffect(() => {
     if (!gameId) {
-      setGameIdState(DEFAULT_GAME_ID_BY_MODE[mode]);
+      setGameIdState(getDefaultGameId(mode, proLeague));
     }
-  }, [gameId, mode]);
+  }, [gameId, mode, proLeague]);
+
+  useEffect(() => {
+    rosterRef.current.clear();
+    logoRef.current.clear();
+    seasonInputRef.current.clear();
+    seasonPowerCacheRef.current.clear();
+    pregameTeamSeasonStatsCacheRef.current.clear();
+  }, [proLeague]);
 
   useEffect(() => {
     setPollingEnabled(true);
@@ -5107,7 +5131,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       lastStatus: null,
       parsedCounts: {},
     }));
-  }, [clearDelayTimers, gameId, getApiBase, mode]);
+  }, [clearDelayTimers, gameId, getApiBase, mode, proLeague]);
 
   useEffect(() => {
     if (liveDataDelaySeconds <= 0 && dataRef.current) {
@@ -5152,7 +5176,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [gameId, mode]);
+  }, [gameId, mode, proLeague]);
 
   const refresh = useCallback(async () => {
     try {
@@ -5160,7 +5184,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       if (!apiBase) {
         throw new Error(API_SETUP_MESSAGE);
       }
-      const payload = await fetchLiveGamePayload(mode, gameId);
+      const payload = await fetchLiveGamePayload(mode, gameId, proLeague);
       console.log(`[LiveGame] URL: ${apiBase}/${mode}/game/${gameId}/live`);
 
       // Phase 1: parse + roster/logo fallback only — no per-player network
@@ -5169,6 +5193,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
         apiBase,
         gameId,
         mode,
+        proLeague,
         payload,
         rosterCache: rosterRef.current,
         logoCache: logoRef.current,
@@ -5243,6 +5268,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
             }
             const ranked = await enrichLiveGameShellWithPlayerRanks(shell.data, {
               mode,
+              proLeague,
               previousData: dataRef.current,
               prevMinutesByPlayerId: prevMinutesByPlayerIdRef.current,
               seasonInputCache: seasonInputRef.current,
@@ -5398,7 +5424,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [gameId, getApiBase, mode, publishLiveData]);
+  }, [gameId, getApiBase, mode, proLeague, publishLiveData]);
 
   useEffect(() => {
     pollingEnabledRef.current = pollingEnabled;
@@ -5470,12 +5496,14 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       isReconnecting,
       gameId,
       mode,
+      proLeague,
       data,
       lastUpdated,
       syncCalibrationPlays,
       debug,
       refresh,
       setGameId,
+      setProLeague,
       setPollingEnabled,
     }),
     [
@@ -5486,12 +5514,14 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       isReconnecting,
       gameId,
       mode,
+      proLeague,
       data,
       lastUpdated,
       syncCalibrationPlays,
       debug,
       refresh,
       setGameId,
+      setProLeague,
     ],
   );
 
