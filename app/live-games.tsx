@@ -104,7 +104,10 @@ import { useSettingsState } from "@/src/settings/SettingsContext";
 import type { ThemeTokens } from "@/src/theme/tokens";
 import { useAppTheme } from "@/src/theme/useAppTheme";
 import { getResolvedDefaultInGameTab } from "@/src/ui/inGameTabs";
-import { PRO_BASKETBALL_LABEL } from "@/src/features/nba/proBasketballLeague";
+import {
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import { AppScreen } from "@/src/ui/components";
 import {
   useGameCardOrigin,
@@ -324,10 +327,20 @@ function getMatchCardTeamName(team: LiveGameListItem["home"]): string {
   return team.shortDisplayName?.trim() || team.abbreviation?.trim() || team.name;
 }
 
-function modeLabel(mode: GameMode): string {
-  if (mode === "nba") return PRO_BASKETBALL_LABEL;
+function modeLabel(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+): string {
+  if (mode === "nba") return getProBasketballLeagueConfig(proLeague).label;
   if (mode === "baseball") return "College Baseball";
   return "College Basketball";
+}
+
+function modeDataScope(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+): string {
+  return mode === "nba" ? `${mode}:${proLeague}` : mode;
 }
 
 function formatFavoriteStartDate(startDateTime?: string): string {
@@ -495,13 +508,14 @@ function buildMatchListGroups(
   activeConferenceKey: string,
   activeConferenceLabel: string | undefined,
   mode: GameMode,
+  proLeague: ProBasketballLeague,
 ): MatchListGroup[] {
   if (games.length === 0) {
     return [];
   }
 
   if (activeConferenceKey !== ALL_CONFERENCE_KEY) {
-    const label = activeConferenceLabel || modeLabel(mode);
+    const label = activeConferenceLabel || modeLabel(mode, proLeague);
     return [
       {
         key: activeConferenceKey,
@@ -1718,7 +1732,7 @@ export default function LiveGamesScreen() {
     navToken?: string | string[];
   }>();
   const needsManualApiSetup = !getApiBaseUrl();
-  const { setGameId } = useLiveGame();
+  const { proLeague, setGameId, setProLeague } = useLiveGame();
   const { mode, setMode } = useGameMode();
   const { setLastEntrySource } = useMultiView();
   const {
@@ -1947,6 +1961,7 @@ export default function LiveGamesScreen() {
         conferenceState.selectedConferenceKey,
         conferenceState.selectedConferenceLabel,
         mode,
+        proLeague,
       );
     },
     [
@@ -2022,7 +2037,7 @@ export default function LiveGamesScreen() {
       currentScreenKey: string,
       options?: { forceRefresh?: boolean; cancelled?: () => boolean },
     ) => {
-      const cacheKey = `match-games:${mode}:${dateKey}`;
+      const cacheKey = `match-games:${modeDataScope(mode, proLeague)}:${dateKey}`;
       if (!options?.forceRefresh) {
         const cachedGames = readResourceCache<LiveGameListItem[]>(
           cacheKey,
@@ -2048,7 +2063,9 @@ export default function LiveGamesScreen() {
       startTask(taskInput);
 
       try {
-        const rows = sortGamesForMatchView(await fetchGamesForDate(mode, dateKey));
+        const rows = sortGamesForMatchView(
+          await fetchGamesForDate(mode, dateKey, proLeague),
+        );
         writeResourceCache(cacheKey, rows);
         if (!options?.cancelled?.()) {
           setGames(rows);
@@ -2068,7 +2085,7 @@ export default function LiveGamesScreen() {
         endTask(taskInput);
       }
     },
-    [endTask, mode, startTask],
+    [endTask, mode, proLeague, startTask],
   );
 
   const loadTopEv = useCallback(
@@ -2338,7 +2355,10 @@ export default function LiveGamesScreen() {
     let cancelled = false;
     const datesToCheck = dateRail
       .map((item) => item.key)
-      .filter((key) => dateGameCounts[`${mode}:${key}`] === undefined);
+      .filter(
+        (key) =>
+          dateGameCounts[`${modeDataScope(mode, proLeague)}:${key}`] === undefined,
+      );
 
     if (datesToCheck.length === 0) {
       return;
@@ -2346,7 +2366,7 @@ export default function LiveGamesScreen() {
 
     void Promise.allSettled(
       datesToCheck.map(async (dateKey) => {
-        const cacheKey = `match-games:${mode}:${dateKey}`;
+        const cacheKey = `match-games:${modeDataScope(mode, proLeague)}:${dateKey}`;
         const cached = readResourceCache<LiveGameListItem[]>(
           cacheKey,
           MATCH_GAMES_CACHE_TTL_MS,
@@ -2354,7 +2374,7 @@ export default function LiveGamesScreen() {
         if (cached) {
           return { dateKey, count: cached.length };
         }
-        const rows = await fetchGamesForDate(mode, dateKey);
+        const rows = await fetchGamesForDate(mode, dateKey, proLeague);
         writeResourceCache(cacheKey, rows);
         return { dateKey, count: rows.length };
       }),
@@ -2366,7 +2386,7 @@ export default function LiveGamesScreen() {
         const next = { ...current };
         results.forEach((result) => {
           if (result.status === "fulfilled") {
-            next[`${mode}:${result.value.dateKey}`] = result.value.count;
+            next[`${modeDataScope(mode, proLeague)}:${result.value.dateKey}`] = result.value.count;
           }
         });
         return next;
@@ -2376,7 +2396,7 @@ export default function LiveGamesScreen() {
     return () => {
       cancelled = true;
     };
-  }, [dateRail, mode, dateGameCounts]);
+  }, [dateRail, mode, proLeague, dateGameCounts]);
 
   // Dedicated, high-priority prefetch for the two dates immediately adjacent
   // to the selected one — the ones a swipe-left/swipe-right actually lands
@@ -2402,7 +2422,7 @@ export default function LiveGamesScreen() {
 
     void Promise.allSettled(
       adjacentDateKeys.map(async (dateKey) => {
-        const cacheKey = `match-games:${mode}:${dateKey}`;
+        const cacheKey = `match-games:${modeDataScope(mode, proLeague)}:${dateKey}`;
         const cached = readResourceCache<LiveGameListItem[]>(
           cacheKey,
           MATCH_GAMES_CACHE_TTL_MS,
@@ -2410,7 +2430,7 @@ export default function LiveGamesScreen() {
         if (cached) {
           return { dateKey, count: cached.length };
         }
-        const rows = await fetchGamesForDate(mode, dateKey);
+        const rows = await fetchGamesForDate(mode, dateKey, proLeague);
         writeResourceCache(cacheKey, rows);
         return { dateKey, count: rows.length };
       }),
@@ -2423,7 +2443,7 @@ export default function LiveGamesScreen() {
         let changed = false;
         results.forEach((result) => {
           if (result.status === "fulfilled") {
-            const key = `${mode}:${result.value.dateKey}`;
+            const key = `${modeDataScope(mode, proLeague)}:${result.value.dateKey}`;
             if (next[key] !== result.value.count) {
               next[key] = result.value.count;
               changed = true;
@@ -2472,7 +2492,7 @@ export default function LiveGamesScreen() {
         const count = dateGameCounts[`${mode}:${item.key}`];
         return typeof count !== "number" || count > 0;
       }),
-    [dateRail, dateGameCounts, mode, selectedDateKey],
+    [dateRail, dateGameCounts, mode, proLeague, selectedDateKey],
   );
   const dateRoutes = useMemo<ConferenceRoute[]>(
     () =>
@@ -2513,7 +2533,7 @@ export default function LiveGamesScreen() {
       }
     }
     return todayKey;
-  }, [dateRail, dateGameCounts, mode, todayKey]);
+  }, [dateRail, dateGameCounts, mode, proLeague, todayKey]);
   const activeConferenceOption = useMemo(
     () =>
       conferenceOptions.find((option) => option.key === activeConferenceKey) ??
@@ -2582,18 +2602,19 @@ export default function LiveGamesScreen() {
       }
       const results = await Promise.allSettled(
         slateGames.map(async (game) => {
-          const cacheKey = `${mode}:${game.gameId}`;
+          const cacheKey = `${modeDataScope(mode, proLeague)}:${game.gameId}`;
           if (options?.forceRefresh) {
             leaderboardGameCacheRef.current.delete(cacheKey);
           }
 
           let data = leaderboardGameCacheRef.current.get(cacheKey);
           if (!data) {
-            const payload = await fetchLiveGamePayload(mode, game.gameId);
+            const payload = await fetchLiveGamePayload(mode, game.gameId, proLeague);
             const built = await buildLiveGameDataFromPayload({
               apiBase,
               gameId: game.gameId,
               mode,
+              proLeague,
               payload,
               rosterCache: leaderboardRosterCacheRef.current,
               logoCache: leaderboardLogoCacheRef.current,
@@ -2661,7 +2682,7 @@ export default function LiveGamesScreen() {
   );
   const getTopEdgeGamesForDate = useCallback(
     async (targetMode: GameMode, dateKey: string) => {
-      const mapKey = `${targetMode}:${dateKey}`;
+      const mapKey = `${modeDataScope(targetMode, proLeague)}:${dateKey}`;
       if (targetMode === mode && dateKey === selectedDateKey && games.length > 0) {
         topEdgeGamesCacheRef.current.set(mapKey, games);
         return games;
@@ -2672,7 +2693,7 @@ export default function LiveGamesScreen() {
         return cachedGames;
       }
 
-      const resourceKey = `match-games:${targetMode}:${dateKey}`;
+      const resourceKey = `match-games:${modeDataScope(targetMode, proLeague)}:${dateKey}`;
       const resourceGames = readResourceCache<LiveGameListItem[]>(
         resourceKey,
         MATCH_GAMES_CACHE_TTL_MS,
@@ -2682,12 +2703,12 @@ export default function LiveGamesScreen() {
         return resourceGames;
       }
 
-      const rows = await fetchGamesForDate(targetMode, dateKey);
+      const rows = await fetchGamesForDate(targetMode, dateKey, proLeague);
       writeResourceCache(resourceKey, rows);
       topEdgeGamesCacheRef.current.set(mapKey, rows);
       return rows;
     },
-    [games, mode, selectedDateKey],
+    [games, mode, proLeague, selectedDateKey],
   );
   useEffect(() => {
     let cancelled = false;
@@ -2993,7 +3014,7 @@ export default function LiveGamesScreen() {
         metaParts[0] ||
         game.conference?.shortName ||
         game.conference?.name ||
-        modeLabel(mode);
+        modeLabel(mode, proLeague);
       const baseballSummary = game.baseballScoreboard;
       const statusText = formatMatchCardStatusText(game);
       // Dim the losing team (name + score) once the game is final.
@@ -3095,7 +3116,7 @@ export default function LiveGamesScreen() {
         </View>
       );
     },
-    [mode, openGame, styles, theme],
+    [mode, openGame, proLeague, styles, theme],
   );
   const renderGameGroupItem = useCallback<ListRenderItem<MatchListGroup>>(
     ({ item: group }) => {
@@ -3105,7 +3126,7 @@ export default function LiveGamesScreen() {
       // specifically, skip the collapsible section header/toggle entirely
       // and just show the games directly. Other leagues (college, baseball)
       // keep the existing collapsible-group behavior untouched.
-      const isWnba = mode === "nba";
+      const isWnba = mode === "nba" && proLeague === "wnba";
 
       const gamesList = (
         <View style={[styles.groupGamesWrap, isWnba ? styles.groupGamesWrapStandalone : null]}>
@@ -3561,7 +3582,7 @@ export default function LiveGamesScreen() {
       const routeCachedGames = activeGamesAreFresh
         ? null
         : readResourceCache<LiveGameListItem[]>(
-            `match-games:${mode}:${route.key}`,
+            `match-games:${modeDataScope(mode, proLeague)}:${route.key}`,
             MATCH_GAMES_CACHE_TTL_MS,
           );
       const routeAllGames = activeGamesAreFresh ? games : (routeCachedGames ?? []);
@@ -4106,7 +4127,7 @@ export default function LiveGamesScreen() {
                     <Pressable
                       key={sportMode}
                       accessibilityRole="button"
-                      accessibilityLabel={modeLabel(sportMode)}
+                      accessibilityLabel={modeLabel(sportMode, proLeague)}
                       onPress={() => {
                         setIsHeaderMenuOpen(false);
                         setMode(sportMode);
@@ -4122,7 +4143,7 @@ export default function LiveGamesScreen() {
                             : styles.headerMenuItemTextMuted,
                         ]}
                       >
-                        {modeLabel(sportMode)}
+                        {modeLabel(sportMode, proLeague)}
                       </Text>
                     </Pressable>
                   ))}
