@@ -865,6 +865,7 @@ export default function TeamProfileScreen() {
                   error={playerDataError}
                   unavailableForMode={nbaRosterUnavailable}
                   isBaseballMode={isBaseballMode}
+                  proLeague={proLeague}
                 />
               </LoadBoundary>
             ) : null}
@@ -1114,6 +1115,7 @@ function RosterTab({
   error,
   unavailableForMode,
   isBaseballMode,
+  proLeague,
 }: {
   players: TeamPlayerStats[];
   sortKey: RosterSortKey;
@@ -1121,6 +1123,7 @@ function RosterTab({
   error: string | null;
   unavailableForMode: boolean;
   isBaseballMode: boolean;
+  proLeague: ProBasketballLeague;
 }) {
   const { tokens: theme } = useAppTheme();
   const styles = useMemo(() => makeRosterStyles(theme), [theme]);
