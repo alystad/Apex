@@ -221,7 +221,7 @@ const styles = useMemo(() => makeStyles(theme), [theme]);
       return () => {
         active = false;
       };
-    }, [syncPredictionsFromSnapshots, syncTargets]),
+    }, [proLeague, syncPredictionsFromSnapshots, syncTargets]),
   );
 
   const historyFilterItems = useMemo<TabItem[]>(
