@@ -120,7 +120,7 @@ function CommentMessageRow({ comment }: CommentMessageRowProps) {
 }
 
 export default function CommentsTab() {
-  const { gameId, mode } = useLiveGame();
+  const { gameId, mode, proLeague } = useLiveGame();
   const { state: settingsState } = useSettingsState();
   const { sharedHeaderScrollY } = useInGameHeaderScroll();
   const insets = useSafeAreaInsets();
@@ -213,7 +213,7 @@ export default function CommentsTab() {
       }
 
       try {
-        const rows = await getGameComments(mode, gameId, COMMENTS_LIMIT);
+        const rows = await getGameComments(mode, gameId, COMMENTS_LIMIT, proLeague);
         const normalized = normalizeComments(rows);
         const previousLastId = commentsRef.current[commentsRef.current.length - 1]?.id ?? null;
         const nextLastId = normalized[normalized.length - 1]?.id ?? null;
@@ -236,7 +236,7 @@ export default function CommentsTab() {
         }
       }
     },
-    [applyComments, gameId],
+    [applyComments, gameId, mode, proLeague],
   );
 
   useEffect(() => {
@@ -374,7 +374,7 @@ export default function CommentsTab() {
       const created = await postGameComment(mode, gameId, {
         authorName: trimmedAuthor,
         body: trimmedDraft,
-      });
+      }, proLeague);
       await AsyncStorage.setItem(AUTHOR_STORAGE_KEY, trimmedAuthor);
       const merged = mergeComments(commentsRef.current, [created]);
       applyComments(merged, { shouldScroll: true });
@@ -385,7 +385,7 @@ export default function CommentsTab() {
     } finally {
       setPosting(false);
     }
-  }, [applyComments, gameId, mode, trimmedAuthor, trimmedDraft]);
+  }, [applyComments, gameId, mode, proLeague, trimmedAuthor, trimmedDraft]);
 
   return (
     <SafeAreaView edges={["left", "right"]} style={styles.screen}>

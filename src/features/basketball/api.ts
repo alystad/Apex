@@ -23,6 +23,10 @@ import {
   getNbaGameComments,
   postNbaGameComment,
 } from "@/src/features/nba/api";
+import {
+  DEFAULT_PRO_BASKETBALL_LEAGUE,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 
 export type { GameComment, LiveGameListItem } from "@/src/features/cbb/api";
@@ -30,9 +34,10 @@ export type { GameComment, LiveGameListItem } from "@/src/features/cbb/api";
 export async function fetchGamesForDate(
   mode: GameMode,
   dateKey: string,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<LiveGameListItem[]> {
   if (mode === "nba") {
-    return fetchNbaGamesForDate(dateKey);
+    return fetchNbaGamesForDate(proLeague, dateKey);
   }
   if (mode === "baseball") {
     return fetchCollegeBaseballGamesForDate(dateKey);
@@ -40,9 +45,12 @@ export async function fetchGamesForDate(
   return fetchCollegeGamesForDate(dateKey);
 }
 
-export async function fetchLiveGames(mode: GameMode): Promise<LiveGameListItem[]> {
+export async function fetchLiveGames(
+  mode: GameMode,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
+): Promise<LiveGameListItem[]> {
   if (mode === "nba") {
-    return fetchNbaLiveGames();
+    return fetchNbaLiveGames(proLeague);
   }
   if (mode === "baseball") {
     return fetchCollegeBaseballLiveGames();
@@ -52,9 +60,10 @@ export async function fetchLiveGames(mode: GameMode): Promise<LiveGameListItem[]
 
 export async function fetchTodayGames(
   mode: GameMode,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<LiveGameListItem[]> {
   if (mode === "nba") {
-    return fetchNbaTodayGames();
+    return fetchNbaTodayGames(proLeague);
   }
   if (mode === "baseball") {
     return fetchCollegeBaseballTodayGames();
@@ -65,9 +74,10 @@ export async function fetchTodayGames(
 export async function fetchLiveGamePayload(
   mode: GameMode,
   gameId: string,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<unknown> {
   if (mode === "nba") {
-    return fetchNbaLiveGamePayload(gameId);
+    return fetchNbaLiveGamePayload(proLeague, gameId);
   }
   if (mode === "baseball") {
     return fetchCollegeBaseballLiveGamePayload(gameId);
@@ -79,9 +89,10 @@ export async function getGameComments(
   mode: GameMode,
   gameId: string,
   limit = 100,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<GameComment[]> {
   if (mode === "nba") {
-    return getNbaGameComments(gameId, limit);
+    return getNbaGameComments(proLeague, gameId, limit);
   }
   if (mode === "baseball") {
     return getCollegeBaseballGameComments(gameId, limit);
@@ -93,9 +104,10 @@ export async function postGameComment(
   mode: GameMode,
   gameId: string,
   input: { authorName: string; body: string },
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<GameComment> {
   if (mode === "nba") {
-    return postNbaGameComment(gameId, input);
+    return postNbaGameComment(proLeague, gameId, input);
   }
   if (mode === "baseball") {
     return postCollegeBaseballGameComment(gameId, input);

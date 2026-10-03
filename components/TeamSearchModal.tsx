@@ -20,7 +20,7 @@ import type { LiveGamePlayer, LiveGameTeam } from "@/hooks/useLiveGame";
 import { useLiveGame } from "@/hooks/useLiveGame";
 import { searchTeams, type TeamSearchResult } from "@/src/features/basketball/teamApi";
 import { buildPlayerProfileHref } from "@/src/features/basketball/playerNavigation";
-import { PRO_BASKETBALL_LABEL } from "@/src/features/nba/proBasketballLeague";
+import { getProBasketballLeagueConfig } from "@/src/features/nba/proBasketballLeague";
 import { useGameModeState } from "@/src/mode/GameModeContext";
 import { useAppTheme } from "@/src/theme/useAppTheme";
 import { getInGameRatingColor } from "@/theme/colors";
@@ -36,7 +36,7 @@ type TeamSearchModalProps = {
 export default function TeamSearchModal({ visible, onClose }: TeamSearchModalProps) {
   const router = useRouter();
   const { mode } = useGameModeState();
-  const { data: liveData, gameId } = useLiveGame();
+  const { data: liveData, gameId, proLeague } = useLiveGame();
   const { tokens: theme } = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [query, setQuery] = useState("");
@@ -46,13 +46,13 @@ export default function TeamSearchModal({ visible, onClose }: TeamSearchModalPro
   const normalizedQuery = useMemo(() => query.trim(), [query]);
   const title =
     mode === "nba"
-      ? `${PRO_BASKETBALL_LABEL} Team Search`
+      ? `${getProBasketballLeagueConfig(proLeague).label} Team Search`
       : mode === "baseball"
         ? "College Baseball Team Search"
         : "Team Search";
   const placeholder =
     mode === "nba"
-      ? `Search ${PRO_BASKETBALL_LABEL} teams`
+      ? `Search ${getProBasketballLeagueConfig(proLeague).label} teams`
       : mode === "baseball"
         ? "Search college baseball teams"
         : "Search teams or players";
@@ -112,7 +112,7 @@ export default function TeamSearchModal({ visible, onClose }: TeamSearchModalPro
     setLoading(true);
     setError(null);
     const timeoutId = setTimeout(() => {
-      void searchTeams(mode, normalizedQuery)
+      void searchTeams(mode, normalizedQuery, 20, proLeague)
         .then((nextResults) => {
           if (!cancelled) {
             setResults(nextResults);
@@ -135,7 +135,7 @@ export default function TeamSearchModal({ visible, onClose }: TeamSearchModalPro
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [mode, normalizedQuery, visible]);
+  }, [mode, normalizedQuery, proLeague, visible]);
 
   const onSelectTeam = (teamId: string) => {
     onClose();

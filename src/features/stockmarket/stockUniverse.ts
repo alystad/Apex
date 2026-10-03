@@ -2,10 +2,9 @@
  * The tradeable universe: every WNBA player, plus their season Impact Rating
  * trend.
  *
- * WNBA ONLY — `STOCK_MARKET_MODE` below is the app's "nba" GameMode, which is
- * currently pointed at WNBA data (see
- * `src/features/nba/proBasketballLeague.ts`). Nothing here is generalized to
- * other leagues on purpose.
+ * WNBA ONLY — stock-market data is explicitly pinned to
+ * `STOCK_MARKET_PRO_LEAGUE` and does not follow the pro schedule toggle.
+ * Nothing here is generalized to other leagues on purpose.
  */
 
 import {
@@ -13,11 +12,13 @@ import {
   type PlayerSeasonRatingSeries,
 } from "@/src/features/basketball/playerApi";
 import { getNbaTeamDirectory, getNbaTeamRoster } from "@/src/features/nba/teamApi";
+import type { ProBasketballLeague } from "@/src/features/nba/proBasketballLeague";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 import type { StockPlayer, StockPricePoint } from "@/src/features/stockmarket/types";
 import { ratingToPrice } from "@/src/features/stockmarket/pricing";
 
 export const STOCK_MARKET_MODE: GameMode = "nba";
+export const STOCK_MARKET_PRO_LEAGUE: ProBasketballLeague = "wnba";
 
 const SEASON = new Date().getFullYear();
 
@@ -45,11 +46,11 @@ function toShortName(name: string): string {
  * `getNbaTeamRoster`, so re-entering the section is cheap.
  */
 export async function loadWnbaStockPlayers(): Promise<StockPlayer[]> {
-  const teams = await getNbaTeamDirectory();
+  const teams = await getNbaTeamDirectory(STOCK_MARKET_PRO_LEAGUE);
 
   const rosters = await Promise.allSettled(
     teams.map(async (team) => {
-      const roster = await getNbaTeamRoster(team.teamId, SEASON);
+      const roster = await getNbaTeamRoster(STOCK_MARKET_PRO_LEAGUE, team.teamId, SEASON);
       return roster.map<StockPlayer>((player) => ({
         playerId: player.playerId,
         name: player.name,
@@ -119,7 +120,7 @@ export type StockSeasonSeries = {
 export async function loadPlayerSeasonSeries(
   playerId: string,
 ): Promise<StockSeasonSeries> {
-  const series = await getPlayerSeasonRatingSeries(STOCK_MARKET_MODE, playerId);
+  const series = await getPlayerSeasonRatingSeries(STOCK_MARKET_MODE, playerId, STOCK_MARKET_PRO_LEAGUE);
   const seasonRating = series.currentTrendRating ?? series.seasonAverage;
   return {
     playerId,

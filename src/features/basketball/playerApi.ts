@@ -15,7 +15,11 @@ import {
   type TeamSummary,
 } from "@/src/features/basketball/teamApi";
 import type { GameMode } from "@/src/mode/gameModeTypes";
-import { PRO_BASKETBALL_ESPN_LEAGUE_PATH } from "@/src/features/nba/proBasketballLeague";
+import {
+  DEFAULT_PRO_BASKETBALL_LEAGUE,
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import { getCachedJson, setCachedJson } from "@/utils/cache";
 
 const PLAYER_CORE_TTL_MS = 1000 * 60 * 5;
@@ -538,9 +542,12 @@ export type PlayerProfileData = {
   };
 };
 
-function getLeaguePath(mode: GameMode): string {
+function getLeaguePath(
+  mode: GameMode,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
+): string {
   if (mode === "nba") {
-    return PRO_BASKETBALL_ESPN_LEAGUE_PATH;
+    return getProBasketballLeagueConfig(proLeague).espnLeaguePath;
   }
   if (mode === "baseball") {
     return "baseball/college-baseball";
@@ -550,12 +557,14 @@ function getLeaguePath(mode: GameMode): string {
 
 async function fetchPlayerJson<T>(
   mode: GameMode,
+  proLeague: ProBasketballLeague,
   playerId: string,
   suffix: string,
   ttlMs: number,
   season?: number,
 ): Promise<T> {
-  const cacheKey = `player-profile:${mode}:${playerId}:${suffix || "base"}${season ? `:${season}` : ""}`;
+  const leagueKey = mode === "nba" ? proLeague : mode;
+  const cacheKey = `player-profile:${leagueKey}:${playerId}:${suffix || "base"}${season ? `:${season}` : ""}`;
   const cached = await getCachedJson<T>(cacheKey);
   if (cached) {
     return cached;
@@ -564,7 +573,7 @@ async function fetchPlayerJson<T>(
   const path = suffix ? `/${suffix}` : "";
   const query = season ? `?season=${season}` : "";
   const response = await fetch(
-    `https://site.web.api.espn.com/apis/common/v3/sports/${getLeaguePath(mode)}/athletes/${playerId}${path}${query}`,
+    `https://site.web.api.espn.com/apis/common/v3/sports/${getLeaguePath(mode, proLeague)}/athletes/${playerId}${path}${query}`,
   );
   if (!response.ok) {
     throw new Error(`Player endpoint HTTP ${response.status}`);
@@ -804,15 +813,17 @@ function normalizeTimelinePoints(
 async function getHistoricalLiveGamePlayers(
   mode: GameMode,
   gameId: string,
+  proLeague: ProBasketballLeague,
 ): Promise<Record<string, LiveGamePlayer[]> | null> {
-  const cacheKey = `player-game-log-live:${mode}:${gameId}`;
+  const leagueKey = mode === "nba" ? proLeague : mode;
+  const cacheKey = `player-game-log-live:${leagueKey}:${gameId}`;
   const cached = await getCachedJson<Record<string, LiveGamePlayer[]>>(cacheKey);
   if (cached) {
     return cached;
   }
 
   try {
-    const data = await getHydratedHistoricalLiveGameData(mode, gameId);
+    const data = await getHydratedHistoricalLiveGameData(mode, gameId, proLeague);
     if (!data?.playersByTeam) {
       return null;
     }
@@ -863,13 +874,14 @@ function findHistoricalPlayer(
 
 async function enrichGameLogWithHistoricalGraphs(
   mode: GameMode,
+  proLeague: ProBasketballLeague,
   playerId: string,
   playerName: string,
   gameLog: PlayerProfileGameLogEntry[],
 ): Promise<PlayerProfileGameLogEntry[]> {
   return Promise.all(
     gameLog.map(async (entry) => {
-      const playersByTeam = await getHistoricalLiveGamePlayers(mode, entry.gameId);
+      const playersByTeam = await getHistoricalLiveGamePlayers(mode, entry.gameId, proLeague);
       if (!playersByTeam) {
         return entry;
       }
@@ -1719,14 +1731,15 @@ export async function getPlayerProfile(
   mode: GameMode,
   playerId: string,
   seed: PlayerIdentitySeed = {},
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<PlayerProfileData> {
   const [base, overview, statsResponse, gameLogResponse, splitsResponse] =
     await Promise.all([
-      fetchPlayerJson<PlayerApiResponse>(mode, playerId, "", PLAYER_CORE_TTL_MS),
-      fetchPlayerJson<OverviewResponse>(mode, playerId, "overview", PLAYER_CORE_TTL_MS),
-      fetchPlayerJson<PlayerStatsResponse>(mode, playerId, "stats", PLAYER_DETAIL_TTL_MS),
-      fetchPlayerJson<GameLogResponse>(mode, playerId, "gamelog", PLAYER_DETAIL_TTL_MS),
-      fetchPlayerJson<SplitsResponse>(mode, playerId, "splits", PLAYER_DETAIL_TTL_MS),
+      fetchPlayerJson<PlayerApiResponse>(mode, proLeague, playerId, "", PLAYER_CORE_TTL_MS),
+      fetchPlayerJson<OverviewResponse>(mode, proLeague, playerId, "overview", PLAYER_CORE_TTL_MS),
+      fetchPlayerJson<PlayerStatsResponse>(mode, proLeague, playerId, "stats", PLAYER_DETAIL_TTL_MS),
+      fetchPlayerJson<GameLogResponse>(mode, proLeague, playerId, "gamelog", PLAYER_DETAIL_TTL_MS),
+      fetchPlayerJson<SplitsResponse>(mode, proLeague, playerId, "splits", PLAYER_DETAIL_TTL_MS),
     ]);
 
   const athlete = base.athlete;
@@ -1755,8 +1768,8 @@ export async function getPlayerProfile(
 
   if (playerTeamId) {
     const [teamSummaryResult, teamPlayerStatsResult] = await Promise.allSettled([
-      getTeamSummary(mode, playerTeamId, DEFAULT_SEASON),
-      getTeamPlayerStats(mode, playerTeamId, DEFAULT_SEASON),
+      getTeamSummary(mode, playerTeamId, DEFAULT_SEASON, proLeague),
+      getTeamPlayerStats(mode, playerTeamId, DEFAULT_SEASON, proLeague),
     ]);
 
     if (teamSummaryResult.status === "fulfilled") {
@@ -1821,6 +1834,7 @@ export async function getPlayerProfile(
     otherSeasonYears.map((year) =>
       fetchPlayerJson<GameLogResponse>(
         mode,
+        proLeague,
         playerId,
         "gamelog",
         PLAYER_DETAIL_TTL_MS,
@@ -1859,6 +1873,7 @@ export async function getPlayerProfile(
     safeText(seed.playerName);
   const gameLog = await enrichGameLogWithHistoricalGraphs(
     mode,
+    proLeague,
     playerId,
     playerDisplayName,
     normalizedGameLog,
@@ -2018,10 +2033,12 @@ export async function getPlayerRecentAverageRating(
   mode: GameMode,
   playerId: string,
   sampleSize = 5,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<number | null> {
   const safeSampleSize = Math.max(1, Math.min(10, Math.floor(sampleSize)));
   const gameLogResponse = await fetchPlayerJson<GameLogResponse>(
     mode,
+    proLeague,
     playerId,
     "gamelog",
     PLAYER_DETAIL_TTL_MS,
@@ -2076,9 +2093,11 @@ export type PlayerSeasonRatingSeries = {
 export async function getPlayerSeasonRatingSeries(
   mode: GameMode,
   playerId: string,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<PlayerSeasonRatingSeries> {
   const gameLogResponse = await fetchPlayerJson<GameLogResponse>(
     mode,
+    proLeague,
     playerId,
     "gamelog",
     PLAYER_DETAIL_TTL_MS,

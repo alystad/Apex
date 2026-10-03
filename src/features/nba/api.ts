@@ -4,14 +4,9 @@ import type {
 } from "@/src/features/cbb/api";
 import { getGameComments, postGameComment } from "@/src/features/cbb/api";
 import {
-  PRO_BASKETBALL_ESPN_LEAGUE_PATH,
-  PRO_BASKETBALL_LABEL,
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
 } from "@/src/features/nba/proBasketballLeague";
-
-const NBA_SCOREBOARD_BASE =
-  `https://site.api.espn.com/apis/site/v2/sports/${PRO_BASKETBALL_ESPN_LEAGUE_PATH}/scoreboard`;
-const NBA_SUMMARY_BASE =
-  `https://site.api.espn.com/apis/site/v2/sports/${PRO_BASKETBALL_ESPN_LEAGUE_PATH}/summary`;
 
 type EspnCompetitionTeam = {
   homeAway?: "home" | "away";
@@ -123,31 +118,50 @@ function mapNbaEventToGameItem(event: EspnScoreboardEvent): LiveGameListItem | n
   };
 }
 
-async function fetchNbaJson<T>(url: string): Promise<T> {
+async function fetchNbaJson<T>(
+  league: ProBasketballLeague,
+  url: string,
+): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`${PRO_BASKETBALL_LABEL} HTTP ${response.status}`);
+    throw new Error(`${getProBasketballLeagueConfig(league).label} HTTP ${response.status}`);
   }
   return (await response.json()) as T;
 }
 
-function getScoreboardUrl(dateKey?: string): string {
-  if (!dateKey) {
-    return NBA_SCOREBOARD_BASE;
-  }
-  const compactDate = dateKey.replace(/-/g, "");
-  return `${NBA_SCOREBOARD_BASE}?dates=${compactDate}`;
+function getScoreboardBase(league: ProBasketballLeague): string {
+  const { espnLeaguePath } = getProBasketballLeagueConfig(league);
+  return `https://site.api.espn.com/apis/site/v2/sports/${espnLeaguePath}/scoreboard`;
 }
 
-function buildCommentKey(gameId: string): string {
-  return `nba:${gameId}`;
+function getSummaryBase(league: ProBasketballLeague): string {
+  const { espnLeaguePath } = getProBasketballLeagueConfig(league);
+  return `https://site.api.espn.com/apis/site/v2/sports/${espnLeaguePath}/summary`;
+}
+
+function getScoreboardUrl(
+  league: ProBasketballLeague,
+  dateKey?: string,
+): string {
+  const base = getScoreboardBase(league);
+  if (!dateKey) {
+    return base;
+  }
+  const compactDate = dateKey.replace(/-/g, "");
+  return `${base}?dates=${compactDate}`;
+}
+
+function buildCommentKey(league: ProBasketballLeague, gameId: string): string {
+  return `${league}:${gameId}`;
 }
 
 export async function fetchNbaGamesForDate(
+  league: ProBasketballLeague,
   dateKey: string,
 ): Promise<LiveGameListItem[]> {
   const payload = await fetchNbaJson<EspnScoreboardResponse>(
-    getScoreboardUrl(dateKey),
+    league,
+    getScoreboardUrl(league, dateKey),
   );
 
   return (payload.events ?? [])
@@ -155,31 +169,46 @@ export async function fetchNbaGamesForDate(
     .filter((game): game is LiveGameListItem => Boolean(game));
 }
 
-export async function fetchNbaLiveGames(): Promise<LiveGameListItem[]> {
-  const payload = await fetchNbaJson<EspnScoreboardResponse>(NBA_SCOREBOARD_BASE);
+export async function fetchNbaLiveGames(
+  league: ProBasketballLeague,
+): Promise<LiveGameListItem[]> {
+  const payload = await fetchNbaJson<EspnScoreboardResponse>(
+    league,
+    getScoreboardBase(league),
+  );
   return (payload.events ?? [])
     .map(mapNbaEventToGameItem)
     .filter((game): game is LiveGameListItem => Boolean(game));
 }
 
-export async function fetchNbaTodayGames(): Promise<LiveGameListItem[]> {
-  return fetchNbaLiveGames();
+export async function fetchNbaTodayGames(
+  league: ProBasketballLeague,
+): Promise<LiveGameListItem[]> {
+  return fetchNbaLiveGames(league);
 }
 
-export async function fetchNbaLiveGamePayload(gameId: string): Promise<unknown> {
-  return fetchNbaJson<unknown>(`${NBA_SUMMARY_BASE}?event=${encodeURIComponent(gameId)}`);
+export async function fetchNbaLiveGamePayload(
+  league: ProBasketballLeague,
+  gameId: string,
+): Promise<unknown> {
+  return fetchNbaJson<unknown>(
+    league,
+    `${getSummaryBase(league)}?event=${encodeURIComponent(gameId)}`,
+  );
 }
 
 export async function getNbaGameComments(
+  league: ProBasketballLeague,
   gameId: string,
   limit = 100,
 ): Promise<GameComment[]> {
-  return getGameComments(buildCommentKey(gameId), limit);
+  return getGameComments(buildCommentKey(league, gameId), limit);
 }
 
 export async function postNbaGameComment(
+  league: ProBasketballLeague,
   gameId: string,
   input: { authorName: string; body: string },
 ): Promise<GameComment> {
-  return postGameComment(buildCommentKey(gameId), input);
+  return postGameComment(buildCommentKey(league, gameId), input);
 }

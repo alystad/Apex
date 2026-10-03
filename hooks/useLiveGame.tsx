@@ -56,9 +56,9 @@ import { fetchLiveGamePayload, type LiveGameListItem } from '@/src/features/bask
 import { consumePendingGameSeed } from '@/src/loading/pendingGameSeed';
 import { getNbaTeamGames, getNbaTeamStats } from '@/src/features/nba/teamApi';
 import {
-  PRO_BASKETBALL_DEFAULT_GAME_ID,
-  PRO_BASKETBALL_ESPN_LEAGUE_PATH,
-  PRO_BASKETBALL_LABEL,
+  DEFAULT_PRO_BASKETBALL_LEAGUE,
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
 } from '@/src/features/nba/proBasketballLeague';
 import type { CollegeBaseballLivePayloadResult } from '@/src/features/cbaseball/api';
 import { computeBaseballRating } from '@/src/lib/ratings/baseballRatingEngine';
@@ -68,11 +68,27 @@ import { useGameModeActions, useGameModeState } from '@/src/mode/GameModeContext
 import type { GameMode } from '@/src/mode/gameModeTypes';
 import { useSettingsState } from '@/src/settings/SettingsContext';
 
-const DEFAULT_GAME_ID_BY_MODE: Record<GameMode, string> = {
+const DEFAULT_GAME_ID_BY_NON_PRO_MODE: Record<Exclude<GameMode, 'nba'>, string> = {
   baseball: '401853300',
   college: '401827691',
-  nba: PRO_BASKETBALL_DEFAULT_GAME_ID,
 };
+
+function getDefaultGameId(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+): string {
+  return mode === 'nba'
+    ? getProBasketballLeagueConfig(proLeague).defaultGameId
+    : DEFAULT_GAME_ID_BY_NON_PRO_MODE[mode];
+}
+
+function getLiveGameCacheId(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  gameId: string,
+): string {
+  return mode === 'nba' ? `${proLeague}:${gameId}` : gameId;
+}
 const POLL_INTERVAL_MS = 5000;
 // How long with no successfully-completed poll before the UI is told
 // polling looks stale (see the watchdog effect in LiveGameProvider).
@@ -453,9 +469,12 @@ export type LiveGameRatingTimelinePoint = {
   };
 };
 
-function getEspnLeaguePath(mode: GameMode): string {
+function getEspnLeaguePath(
+  mode: GameMode,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
+): string {
   if (mode === 'nba') {
-    return PRO_BASKETBALL_ESPN_LEAGUE_PATH;
+    return getProBasketballLeagueConfig(proLeague).espnLeaguePath;
   }
   if (mode === 'baseball') {
     return 'baseball/college-baseball';
@@ -463,16 +482,28 @@ function getEspnLeaguePath(mode: GameMode): string {
   return 'basketball/mens-college-basketball';
 }
 
-function getAthleteStatsUrl(mode: GameMode, athleteId: string): string {
-  return `https://site.web.api.espn.com/apis/common/v3/sports/${getEspnLeaguePath(mode)}/athletes/${athleteId}/stats`;
+function getAthleteStatsUrl(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  athleteId: string,
+): string {
+  return `https://site.web.api.espn.com/apis/common/v3/sports/${getEspnLeaguePath(mode, proLeague)}/athletes/${athleteId}/stats`;
 }
 
-function getTeamRosterUrl(mode: GameMode, teamId: string): string {
-  return `https://site.api.espn.com/apis/site/v2/sports/${getEspnLeaguePath(mode)}/teams/${teamId}/roster`;
+function getTeamRosterUrl(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  teamId: string,
+): string {
+  return `https://site.api.espn.com/apis/site/v2/sports/${getEspnLeaguePath(mode, proLeague)}/teams/${teamId}/roster`;
 }
 
-function getTeamInfoUrl(mode: GameMode, teamId: string): string {
-  return `https://site.api.espn.com/apis/site/v2/sports/${getEspnLeaguePath(mode)}/teams/${teamId}`;
+function getTeamInfoUrl(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  teamId: string,
+): string {
+  return `https://site.api.espn.com/apis/site/v2/sports/${getEspnLeaguePath(mode, proLeague)}/teams/${teamId}`;
 }
 
 type SummaryCompetitor = NonNullable<
@@ -657,12 +688,14 @@ type LiveGameContextValue = {
   isReconnecting: boolean;
   gameId: string;
   mode: GameMode;
+  proLeague: ProBasketballLeague;
   data: LiveGameData | null;
   lastUpdated: string | null;
   syncCalibrationPlays: LiveGameSyncCalibrationPlay[];
   debug: LiveGameDebug;
   refresh: () => Promise<void>;
   setGameId: (gameId: string, mode?: GameMode) => void;
+  setProLeague: (league: ProBasketballLeague) => void;
   setPollingEnabled: (enabled: boolean) => void;
 };
 
@@ -805,18 +838,20 @@ function parseTeamStatRowValue(value: number | null, displayValue: string): numb
 }
 
 async function fetchPregameNbaTeamSeasonStats(
+  proLeague: ProBasketballLeague,
   teamId: string,
   cache: Map<string, PregameTeamSeasonStatsEntry | null>,
 ): Promise<PregameTeamSeasonStatsEntry | null> {
-  if (cache.has(teamId)) {
-    return cache.get(teamId) ?? null;
+  const cacheKey = `${proLeague}:${teamId}`;
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey) ?? null;
   }
 
   try {
     const season = new Date().getFullYear();
     const [teamStats, gamesPage] = await Promise.all([
-      getNbaTeamStats(teamId, season),
-      getNbaTeamGames(teamId, season, 0, 100, 'regular'),
+      getNbaTeamStats(proLeague, teamId, season),
+      getNbaTeamGames(proLeague, teamId, season, 0, 100, 'regular'),
     ]);
 
     const statValue = (key: string) => {
@@ -836,7 +871,7 @@ async function fetchPregameNbaTeamSeasonStats(
     const turnovers = statValue('avgTurnovers');
 
     if (pointsFor === null || pointsAgainst === null) {
-      cache.set(teamId, null);
+      cache.set(cacheKey, null);
       return null;
     }
 
@@ -846,7 +881,7 @@ async function fetchPregameNbaTeamSeasonStats(
       possessions: 100,
       turnovers,
     };
-    cache.set(teamId, entry);
+    cache.set(cacheKey, entry);
     return entry;
   } catch {
     cache.set(teamId, null);
@@ -886,6 +921,7 @@ function upsertSummaryStat(
 
 async function applyPregameNbaSeasonStatsFallback(
   summary: SummaryResponse,
+  proLeague: ProBasketballLeague,
   cache: Map<string, PregameTeamSeasonStatsEntry | null>,
 ): Promise<SummaryResponse> {
   const competition = summary.header?.competitions?.[0];
@@ -911,7 +947,7 @@ async function applyPregameNbaSeasonStatsFallback(
       if (!teamId) {
         return null;
       }
-      const seasonStats = await fetchPregameNbaTeamSeasonStats(teamId, cache);
+      const seasonStats = await fetchPregameNbaTeamSeasonStats(proLeague, teamId, cache);
       return seasonStats ? { teamId, seasonStats } : null;
     }),
   );
@@ -2805,6 +2841,7 @@ function parseData(
   gameId: string,
   summaryUrl: string,
   seasonPowerCache?: Map<string, SeasonPowerCacheEntry>,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): { data: LiveGameData; parsedCounts: Record<string, number> } {
   if (mode === 'baseball') {
     return parseBaseballData(summary as BaseballSummaryResponse, mode, gameId, summaryUrl);
@@ -3031,7 +3068,9 @@ function parseData(
     meta: {
       competition: safeString(
         comp?.notes?.[0]?.headline,
-        mode === 'nba' ? `${PRO_BASKETBALL_LABEL} Basketball` : 'NCAA Basketball',
+        mode === 'nba'
+          ? `${getProBasketballLeagueConfig(proLeague).label} Basketball`
+          : 'NCAA Basketball',
       ),
       round: safeString(comp?.type?.shortDetail, 'Regular Season'),
       venue: safeString(comp?.venue?.fullName),
@@ -3080,6 +3119,7 @@ type BuildLiveGameDataFromPayloadOptions = {
   apiBase: string;
   gameId: string;
   mode: GameMode;
+  proLeague?: ProBasketballLeague;
   payload: unknown;
   previousData?: LiveGameData | null;
   prevMinutesByPlayerId?: Map<string, number>;
@@ -3233,6 +3273,7 @@ async function buildLiveGameShellFromPayload({
   apiBase,
   gameId,
   mode,
+  proLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
   payload,
   rosterCache = new Map<string, LiveGamePlayer[]>(),
   logoCache = new Map<string, string>(),
@@ -3243,6 +3284,7 @@ async function buildLiveGameShellFromPayload({
   | 'apiBase'
   | 'gameId'
   | 'mode'
+  | 'proLeague'
   | 'payload'
   | 'rosterCache'
   | 'logoCache'
@@ -3280,14 +3322,25 @@ async function buildLiveGameShellFromPayload({
   }
 
   if (mode === 'nba') {
-    summary = await applyPregameNbaSeasonStatsFallback(summary, pregameTeamSeasonStatsCache);
+    summary = await applyPregameNbaSeasonStatsFallback(
+      summary,
+      proLeague,
+      pregameTeamSeasonStatsCache,
+    );
   }
 
   const summaryUrl = `${apiBase}/${mode}/game/${gameId}/live`;
-  const parsed = parseData(summary, mode, gameId, summaryUrl, seasonPowerCache);
+  const parsed = parseData(
+    summary,
+    mode,
+    gameId,
+    summaryUrl,
+    seasonPowerCache,
+    proLeague,
+  );
   const [withRosterFallback, logoResult] = await Promise.all([
-    applyRosterFallback(parsed.data, parsed.parsedCounts, rosterCache),
-    applyTeamLogoFallback(parsed.data, logoCache),
+    applyRosterFallback(parsed.data, parsed.parsedCounts, rosterCache, proLeague),
+    applyTeamLogoFallback(parsed.data, logoCache, proLeague),
   ]);
   const withLogos: LiveGameData = {
     ...parsed.data,
@@ -3315,12 +3368,13 @@ async function enrichLiveGameShellWithPlayerRanks(
   withLogos: LiveGameData,
   {
     mode,
+    proLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
     previousData = null,
     prevMinutesByPlayerId = new Map<string, number>(),
     seasonInputCache = new Map<string, SeasonPlayerRatingInput>(),
   }: Pick<
     BuildLiveGameDataFromPayloadOptions,
-    'mode' | 'previousData' | 'prevMinutesByPlayerId' | 'seasonInputCache'
+    'mode' | 'proLeague' | 'previousData' | 'prevMinutesByPlayerId' | 'seasonInputCache'
   >,
 ): Promise<{ data: LiveGameData; onCourtDebug: OnCourtDebugInfo }> {
   const athleteIds = Object.values(withLogos.playersByTeam)
@@ -3332,7 +3386,7 @@ async function enrichLiveGameShellWithPlayerRanks(
   if (missingIds.length > 0) {
     const seasonEntries = await Promise.all(
       missingIds.map(async (athleteId) => {
-        const input = await fetchSeasonPlayerRatingInput(mode, athleteId);
+        const input = await fetchSeasonPlayerRatingInput(mode, proLeague, athleteId);
         return { athleteId, input };
       }),
     );
@@ -3616,8 +3670,12 @@ function enrichBaseballOnFieldPlayers(
   };
 }
 
-async function fetchRosterPlayers(mode: GameMode, teamId: string): Promise<LiveGamePlayer[]> {
-  const url = getTeamRosterUrl(mode, teamId);
+async function fetchRosterPlayers(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  teamId: string,
+): Promise<LiveGamePlayer[]> {
+  const url = getTeamRosterUrl(mode, proLeague, teamId);
   try {
     console.log(`[live hook] request -> ${url}`);
     const response = await fetch(url);
@@ -3642,6 +3700,7 @@ async function applyRosterFallback(
   data: LiveGameData,
   parsedCounts: Record<string, number>,
   rosterByTeam: Map<string, LiveGamePlayer[]>,
+  proLeague: ProBasketballLeague,
 ): Promise<{ data: LiveGameData; parsedCounts: Record<string, number> }> {
   const nextPlayersByTeam: Record<string, LiveGamePlayer[]> = { ...data.playersByTeam };
   const nextCounts: Record<string, number> = { ...parsedCounts };
@@ -3651,7 +3710,7 @@ async function applyRosterFallback(
       const existing = nextPlayersByTeam[team.id] ?? [];
       let rosterPlayers = rosterByTeam.get(team.id) ?? [];
       if (rosterPlayers.length === 0) {
-        rosterPlayers = await fetchRosterPlayers(data.mode, team.id);
+        rosterPlayers = await fetchRosterPlayers(data.mode, proLeague, team.id);
         if (rosterPlayers.length > 0) {
           rosterByTeam.set(team.id, rosterPlayers);
         }
@@ -3699,8 +3758,12 @@ function pickTeamLogo(info: TeamInfoResponse): string {
   return safeString(preferred?.href, '');
 }
 
-async function fetchTeamLogo(mode: GameMode, teamId: string): Promise<string> {
-  const url = getTeamInfoUrl(mode, teamId);
+async function fetchTeamLogo(
+  mode: GameMode,
+  proLeague: ProBasketballLeague,
+  teamId: string,
+): Promise<string> {
+  const url = getTeamInfoUrl(mode, proLeague, teamId);
   try {
     console.log(`[live hook] request -> ${url}`);
     const response = await fetch(url);
@@ -3721,7 +3784,11 @@ async function fetchTeamLogo(mode: GameMode, teamId: string): Promise<string> {
   }
 }
 
-async function applyTeamLogoFallback(data: LiveGameData, logoByTeam: Map<string, string>): Promise<LiveGameData> {
+async function applyTeamLogoFallback(
+  data: LiveGameData,
+  logoByTeam: Map<string, string>,
+  proLeague: ProBasketballLeague,
+): Promise<LiveGameData> {
   const nextTeams = await Promise.all(
     data.teams.map(async (team) => {
       if (hasValidLogo(team.logo)) {
@@ -3730,7 +3797,7 @@ async function applyTeamLogoFallback(data: LiveGameData, logoByTeam: Map<string,
 
       let logo = logoByTeam.get(team.id) ?? '';
       if (!hasValidLogo(logo)) {
-        logo = await fetchTeamLogo(data.mode, team.id);
+        logo = await fetchTeamLogo(data.mode, proLeague, team.id);
         if (hasValidLogo(logo)) {
           logoByTeam.set(team.id, logo);
         }
@@ -3826,12 +3893,13 @@ function statAverageFromMaps(
 
 async function fetchSeasonPlayerRatingInput(
   mode: GameMode,
+  proLeague: ProBasketballLeague,
   athleteId: string,
 ): Promise<SeasonPlayerRatingInput | null> {
   if (mode === 'baseball') {
     return null;
   }
-  const url = getAthleteStatsUrl(mode, athleteId);
+  const url = getAthleteStatsUrl(mode, proLeague, athleteId);
   try {
     console.log(`[live hook] request -> ${url}`);
     const response = await fetch(url);
@@ -3891,8 +3959,9 @@ async function fetchSeasonPlayerRatingInput(
 export async function getHydratedHistoricalLiveGameData(
   mode: GameMode,
   gameId: string,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<LiveGameData | null> {
-  const cached = await getCachedLiveGame<LiveGameData>(gameId, mode);
+  const cached = await getCachedLiveGame<LiveGameData>(getLiveGameCacheId(mode, proLeague, gameId), mode);
   if (cached?.data) {
     return cached.data.mode ? cached.data : { ...cached.data, mode };
   }
@@ -3909,11 +3978,12 @@ export async function getHydratedHistoricalLiveGameData(
     if (!apiBase) {
       throw new Error(API_SETUP_MESSAGE);
     }
-    const payload = await fetchLiveGamePayload(mode, gameId);
+    const payload = await fetchLiveGamePayload(mode, gameId, proLeague);
     const built = await buildLiveGameDataFromPayload({
       apiBase,
       gameId,
       mode,
+      proLeague,
       payload,
       pregameTeamSeasonStatsCache: new Map<string, PregameTeamSeasonStatsEntry | null>(),
     });
@@ -3921,7 +3991,7 @@ export async function getHydratedHistoricalLiveGameData(
       return null;
     }
 
-    await setCachedLiveGame(gameId, built.data, mode);
+    await setCachedLiveGame(getLiveGameCacheId(mode, proLeague, gameId), built.data, mode);
     return built.data;
   } catch {
     return null;
@@ -4912,7 +4982,10 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [isFromCache, setIsFromCache] = useState(false);
-  const [gameId, setGameIdState] = useState(DEFAULT_GAME_ID_BY_MODE.college);
+  const [proLeague, setProLeagueState] = useState<ProBasketballLeague>(
+    DEFAULT_PRO_BASKETBALL_LEAGUE,
+  );
+  const [gameId, setGameIdState] = useState(DEFAULT_GAME_ID_BY_NON_PRO_MODE.college);
   const [data, setData] = useState<LiveGameData | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [syncCalibrationPlays, setSyncCalibrationPlays] = useState<
@@ -4924,7 +4997,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
   // "reconnecting" signal rather than silently going stale with no feedback.
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [debug, setDebug] = useState<LiveGameDebug>({
-    url: `${mode}:${DEFAULT_GAME_ID_BY_MODE[mode]}`,
+    url: `${mode}:${getDefaultGameId(mode, DEFAULT_PRO_BASKETBALL_LEAGUE)}`,
     lastStatus: null,
     parsedCounts: {},
   });
@@ -5006,11 +5079,32 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
     setGameIdState(nextGameId);
   }, [gameId, mode, setMode]);
 
+  const setProLeague = useCallback(
+    (nextLeague: ProBasketballLeague) => {
+      if (nextLeague === proLeague) {
+        return;
+      }
+      setProLeagueState(nextLeague);
+      if (mode === 'nba') {
+        setGameIdState(getDefaultGameId('nba', nextLeague));
+      }
+    },
+    [mode, proLeague],
+  );
+
   useEffect(() => {
     if (!gameId) {
-      setGameIdState(DEFAULT_GAME_ID_BY_MODE[mode]);
+      setGameIdState(getDefaultGameId(mode, proLeague));
     }
-  }, [gameId, mode]);
+  }, [gameId, mode, proLeague]);
+
+  useEffect(() => {
+    rosterRef.current.clear();
+    logoRef.current.clear();
+    seasonInputRef.current.clear();
+    seasonPowerCacheRef.current.clear();
+    pregameTeamSeasonStatsCacheRef.current.clear();
+  }, [proLeague]);
 
   useEffect(() => {
     setPollingEnabled(true);
@@ -5045,7 +5139,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       lastStatus: null,
       parsedCounts: {},
     }));
-  }, [clearDelayTimers, gameId, getApiBase, mode]);
+  }, [clearDelayTimers, gameId, getApiBase, mode, proLeague]);
 
   useEffect(() => {
     if (liveDataDelaySeconds <= 0 && dataRef.current) {
@@ -5063,7 +5157,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     const loadCached = async () => {
-      const cached = await getCachedLiveGame<LiveGameData>(gameId, mode);
+      const cached = await getCachedLiveGame<LiveGameData>(getLiveGameCacheId(mode, proLeague, gameId), mode);
       if (!mounted || !cached) {
         return;
       }
@@ -5090,7 +5184,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [gameId, mode]);
+  }, [gameId, mode, proLeague]);
 
   const refresh = useCallback(async () => {
     try {
@@ -5098,7 +5192,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       if (!apiBase) {
         throw new Error(API_SETUP_MESSAGE);
       }
-      const payload = await fetchLiveGamePayload(mode, gameId);
+      const payload = await fetchLiveGamePayload(mode, gameId, proLeague);
       console.log(`[LiveGame] URL: ${apiBase}/${mode}/game/${gameId}/live`);
 
       // Phase 1: parse + roster/logo fallback only — no per-player network
@@ -5107,6 +5201,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
         apiBase,
         gameId,
         mode,
+        proLeague,
         payload,
         rosterCache: rosterRef.current,
         logoCache: logoRef.current,
@@ -5181,6 +5276,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
             }
             const ranked = await enrichLiveGameShellWithPlayerRanks(shell.data, {
               mode,
+              proLeague,
               previousData: dataRef.current,
               prevMinutesByPlayerId: prevMinutesByPlayerIdRef.current,
               seasonInputCache: seasonInputRef.current,
@@ -5231,7 +5327,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
           publishLiveData(withRatings, fetchedAtIso);
         }
 
-        await setCachedLiveGame(gameId, withRatings, mode);
+        await setCachedLiveGame(getLiveGameCacheId(mode, proLeague, gameId), withRatings, mode);
         setIsOffline(false);
         setIsFromCache(false);
         lastSuccessfulPollAtRef.current = Date.now();
@@ -5294,7 +5390,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
         publishLiveData(withRatings, fetchedAtIso);
       }
 
-      await setCachedLiveGame(gameId, withRatings, mode);
+      await setCachedLiveGame(getLiveGameCacheId(mode, proLeague, gameId), withRatings, mode);
       setIsOffline(false);
       setIsFromCache(false);
       lastSuccessfulPollAtRef.current = Date.now();
@@ -5336,7 +5432,7 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [gameId, getApiBase, mode, publishLiveData]);
+  }, [gameId, getApiBase, mode, proLeague, publishLiveData]);
 
   useEffect(() => {
     pollingEnabledRef.current = pollingEnabled;
@@ -5408,12 +5504,14 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       isReconnecting,
       gameId,
       mode,
+      proLeague,
       data,
       lastUpdated,
       syncCalibrationPlays,
       debug,
       refresh,
       setGameId,
+      setProLeague,
       setPollingEnabled,
     }),
     [
@@ -5424,12 +5522,14 @@ export function LiveGameProvider({ children }: { children: React.ReactNode }) {
       isReconnecting,
       gameId,
       mode,
+      proLeague,
       data,
       lastUpdated,
       syncCalibrationPlays,
       debug,
       refresh,
       setGameId,
+      setProLeague,
     ],
   );
 

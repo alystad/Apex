@@ -365,7 +365,7 @@ export default function PlayerProfileScreen() {
   const { tokens: theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const layout = useWindowDimensions();
-  const { data: liveData, gameId: liveGameId, setGameId } = useLiveGame();
+  const { data: liveData, gameId: liveGameId, proLeague, setGameId } = useLiveGame();
   const { setLastEntrySource } = useMultiView();
   const playerId = routeParam(params.playerId) ?? "";
   const routeMode = routeParam(params.mode);
@@ -441,7 +441,7 @@ export default function PlayerProfileScreen() {
 
     setLoading(true);
     try {
-      const nextProfile = await getPlayerProfile(mode, playerId, seed);
+      const nextProfile = await getPlayerProfile(mode, playerId, seed, proLeague);
       setProfile(nextProfile);
       setError(null);
     } catch (nextError) {
@@ -449,7 +449,7 @@ export default function PlayerProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [mode, playerId, seed]);
+  }, [mode, playerId, proLeague, seed]);
 
   useEffect(() => {
     void loadProfile();

@@ -2,6 +2,10 @@ import {
   getTeamGames,
   type TeamGame,
 } from "@/src/features/basketball/teamApi";
+import {
+  DEFAULT_PRO_BASKETBALL_LEAGUE,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 
 const TEAM_GAMES_PAGE_SIZE = 50;
@@ -41,6 +45,7 @@ export async function getAllTeamSeasonGames(
   mode: GameMode,
   teamId: string,
   season: number,
+  proLeague: ProBasketballLeague = DEFAULT_PRO_BASKETBALL_LEAGUE,
 ): Promise<TeamGame[]> {
   const rows: TeamGame[] = [];
   let page = 0;
@@ -53,6 +58,8 @@ export async function getAllTeamSeasonGames(
       page,
       TEAM_GAMES_PAGE_SIZE,
       "all",
+      "",
+      proLeague,
     );
     rows.push(...(data.rows ?? []));
     if (!data.hasMore || (data.rows ?? []).length === 0) {

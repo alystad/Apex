@@ -11,13 +11,10 @@ import type {
   TeamSummary,
 } from "@/src/features/cbb/teamApi";
 import {
-  PRO_BASKETBALL_ESPN_LEAGUE_PATH,
-  PRO_BASKETBALL_FALLBACK_TEAM_NAME,
-  PRO_BASKETBALL_LABEL,
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
 } from "@/src/features/nba/proBasketballLeague";
 
-const NBA_TEAM_BASE =
-  `https://site.api.espn.com/apis/site/v2/sports/${PRO_BASKETBALL_ESPN_LEAGUE_PATH}/teams`;
 const DEFAULT_TTL_MS = 1000 * 60 * 5;
 const LONG_TTL_MS = 1000 * 60 * 30;
 
@@ -141,10 +138,18 @@ function pickLogo(logos?: Array<{ href?: string; rel?: string[] }>): string {
   );
 }
 
-async function fetchNbaJson<T>(url: string): Promise<T> {
+function getNbaTeamBase(league: ProBasketballLeague): string {
+  const { espnLeaguePath } = getProBasketballLeagueConfig(league);
+  return `https://site.api.espn.com/apis/site/v2/sports/${espnLeaguePath}/teams`;
+}
+
+async function fetchNbaJson<T>(
+  league: ProBasketballLeague,
+  url: string,
+): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`${PRO_BASKETBALL_LABEL} HTTP ${response.status}`);
+    throw new Error(`${getProBasketballLeagueConfig(league).label} HTTP ${response.status}`);
   }
   return (await response.json()) as T;
 }
@@ -159,16 +164,19 @@ async function cached<T>(key: string, ttlMs: number, loader: () => Promise<T>): 
   return data;
 }
 
-function getConferenceLabel(_teamId: string): string {
-  return PRO_BASKETBALL_LABEL;
+function getConferenceLabel(league: ProBasketballLeague, _teamId: string): string {
+  return getProBasketballLeagueConfig(league).label;
 }
 
 export async function getNbaTeamSummary(
+  league: ProBasketballLeague,
   teamId: string,
   _season: number,
 ): Promise<TeamSummary> {
-  return cached(`nba:team-summary:${teamId}`, DEFAULT_TTL_MS, async () => {
-    const payload = await fetchNbaJson<NbaTeamResponse>(`${NBA_TEAM_BASE}/${teamId}`);
+  const config = getProBasketballLeagueConfig(league);
+  const teamBase = getNbaTeamBase(league);
+  return cached(`${league}:team-summary:${teamId}`, DEFAULT_TTL_MS, async () => {
+    const payload = await fetchNbaJson<NbaTeamResponse>(league, `${teamBase}/${teamId}`);
     const team = payload.team;
     const record =
       team?.record?.items?.find((item) => item.type === "total")?.summary ||
@@ -177,11 +185,11 @@ export async function getNbaTeamSummary(
 
     return {
       teamId,
-      name: safeText(team?.displayName, PRO_BASKETBALL_FALLBACK_TEAM_NAME),
+      name: safeText(team?.displayName, config.fallbackTeamName),
       shortName: safeText(team?.shortDisplayName, safeText(team?.displayName, "Team")),
       logo: pickLogo(team?.logos),
       record,
-      conference: getConferenceLabel(teamId),
+      conference: getConferenceLabel(league, teamId),
       ranking: null,
       color: safeText(team?.color) || null,
       alternateColor: safeText(team?.alternateColor) || null,
@@ -250,6 +258,7 @@ function mapScheduleGame(teamId: string, event: NonNullable<NbaScheduleResponse[
 }
 
 export async function getNbaTeamGames(
+  league: ProBasketballLeague,
   teamId: string,
   _season: number,
   page: number,
@@ -257,21 +266,22 @@ export async function getNbaTeamGames(
   _competition = "all",
   _search = "",
 ): Promise<TeamGamesPage> {
+  const teamBase = getNbaTeamBase(league);
   return cached(
-    `nba:team-games:${teamId}:${page}:${pageSize}:${_competition}`,
+    `${league}:team-games:${teamId}:${page}:${pageSize}:${_competition}`,
     DEFAULT_TTL_MS,
     async () => {
       const scheduleUrls =
         _competition === "regular"
-          ? [`${NBA_TEAM_BASE}/${teamId}/schedule?seasontype=2`]
+          ? [`${teamBase}/${teamId}/schedule?seasontype=2`]
           : _competition === "postseason"
-            ? [`${NBA_TEAM_BASE}/${teamId}/schedule?seasontype=3`]
+            ? [`${teamBase}/${teamId}/schedule?seasontype=3`]
             : [
-                `${NBA_TEAM_BASE}/${teamId}/schedule`,
-                `${NBA_TEAM_BASE}/${teamId}/schedule?seasontype=2`,
+                `${teamBase}/${teamId}/schedule`,
+                `${teamBase}/${teamId}/schedule?seasontype=2`,
               ];
       const payloads = await Promise.all(
-        scheduleUrls.map((url) => fetchNbaJson<NbaScheduleResponse>(url)),
+        scheduleUrls.map((url) => fetchNbaJson<NbaScheduleResponse>(league, url)),
       );
       const rows = payloads
         .flatMap((payload) => payload.events ?? [])
@@ -297,12 +307,15 @@ export async function getNbaTeamGames(
 }
 
 export async function getNbaTeamRoster(
+  league: ProBasketballLeague,
   teamId: string,
   _season: number,
 ): Promise<TeamRosterPlayer[]> {
-  return cached(`nba:team-roster:${teamId}`, LONG_TTL_MS, async () => {
+  const teamBase = getNbaTeamBase(league);
+  return cached(`${league}:team-roster:${teamId}`, LONG_TTL_MS, async () => {
     const payload = await fetchNbaJson<NbaRosterResponse>(
-      `${NBA_TEAM_BASE}/${teamId}/roster`,
+      league,
+      `${teamBase}/${teamId}/roster`,
     );
 
     return (payload.athletes ?? []).map((athlete) => ({
@@ -317,10 +330,11 @@ export async function getNbaTeamRoster(
 }
 
 export async function getNbaTeamPlayerStats(
+  league: ProBasketballLeague,
   teamId: string,
   season: number,
 ): Promise<TeamPlayerStats[]> {
-  const roster = await getNbaTeamRoster(teamId, season);
+  const roster = await getNbaTeamRoster(league, teamId, season);
   return roster.map((player) => ({
     ...player,
     games: 0,
@@ -368,12 +382,15 @@ const NBA_TEAM_STAT_NAMES: Array<{ key: string; label: string }> = [
 ];
 
 export async function getNbaTeamStats(
+  league: ProBasketballLeague,
   teamId: string,
   _season: number,
 ): Promise<TeamStatRow[]> {
-  return cached(`nba:team-stats:${teamId}`, LONG_TTL_MS, async () => {
+  const teamBase = getNbaTeamBase(league);
+  return cached(`${league}:team-stats:${teamId}`, LONG_TTL_MS, async () => {
     const payload = await fetchNbaJson<NbaStatisticsResponse>(
-      `${NBA_TEAM_BASE}/${teamId}/statistics`,
+      league,
+      `${teamBase}/${teamId}/statistics`,
     );
 
     const allStats =
@@ -401,11 +418,12 @@ export async function getNbaTeamStats(
 }
 
 export async function getNbaTeamRatingsTimeline(
+  league: ProBasketballLeague,
   _teamId: string,
   _season: number,
 ): Promise<TeamRatingsTimeline> {
   return {
-    formula: `${PRO_BASKETBALL_LABEL} ratings are not available yet.`,
+    formula: `${getProBasketballLeagueConfig(league).label} ratings are not available yet.`,
     points: [],
   };
 }
@@ -434,14 +452,17 @@ export type NbaDirectoryTeam = TeamSearchResult & {
 };
 
 /**
- * Every team in the league this "nba" mode currently points at (WNBA — see
- * proBasketballLeague.ts). Exported so features that need the whole league
- * roster-by-roster (e.g. the Stock Market player universe) don't have to
- * reach for team search with a guessed query.
+ * Every team in the selected pro league. Exported so features that need the
+ * whole league roster-by-roster (e.g. the Stock Market player universe) don't
+ * have to reach for team search with a guessed query.
  */
-export async function getNbaTeamDirectory(): Promise<NbaDirectoryTeam[]> {
-  return cached("nba:team-directory", LONG_TTL_MS, async () => {
-    const payload = await fetchNbaJson<NbaTeamsDirectoryResponse>(NBA_TEAM_BASE);
+export async function getNbaTeamDirectory(
+  league: ProBasketballLeague,
+): Promise<NbaDirectoryTeam[]> {
+  const config = getProBasketballLeagueConfig(league);
+  const teamBase = getNbaTeamBase(league);
+  return cached(`${league}:team-directory`, LONG_TTL_MS, async () => {
+    const payload = await fetchNbaJson<NbaTeamsDirectoryResponse>(league, teamBase);
     const teams = payload.sports?.[0]?.leagues?.[0]?.teams ?? [];
 
     const directory: NbaDirectoryTeam[] = [];
@@ -454,14 +475,14 @@ export async function getNbaTeamDirectory(): Promise<NbaDirectoryTeam[]> {
 
       directory.push({
         teamId,
-        name: safeText(team?.displayName, PRO_BASKETBALL_FALLBACK_TEAM_NAME),
+        name: safeText(team?.displayName, config.fallbackTeamName),
         shortName: safeText(
           team?.shortDisplayName,
           safeText(team?.displayName, "Team"),
         ),
         abbreviation: safeText(team?.abbreviation),
         logo: team?.logos?.[0]?.href?.trim() || null,
-        conference: getConferenceLabel(teamId),
+        conference: getConferenceLabel(league, teamId),
         color: safeText(team?.color) || null,
         alternateColor: safeText(team?.alternateColor) || null,
       });
@@ -471,8 +492,10 @@ export async function getNbaTeamDirectory(): Promise<NbaDirectoryTeam[]> {
   });
 }
 
-async function getNbaDirectory(): Promise<TeamSearchResult[]> {
-  return getNbaTeamDirectory();
+async function getNbaDirectory(
+  league: ProBasketballLeague,
+): Promise<TeamSearchResult[]> {
+  return getNbaTeamDirectory(league);
 }
 
 function normalizeQuery(value: string): string {
@@ -490,6 +513,7 @@ function scoreSearch(team: TeamSearchResult, query: string): number {
 }
 
 export async function searchNbaTeams(
+  league: ProBasketballLeague,
   query: string,
   limit = 20,
 ): Promise<TeamSearchResult[]> {
@@ -497,7 +521,7 @@ export async function searchNbaTeams(
   if (!normalized) {
     return [];
   }
-  const directory = await getNbaDirectory();
+  const directory = await getNbaDirectory(league);
   return directory
     .map((team) => ({ team, score: scoreSearch(team, normalized) }))
     .filter((entry) => entry.score > 0)

@@ -124,7 +124,7 @@ export default function InGameCommentsPanel({
   onScrollAwayFromTop,
   onScrollTowardTopAtTop,
 }: InGameCommentsPanelProps) {
-  const { gameId, mode } = useLiveGame();
+  const { gameId, mode, proLeague } = useLiveGame();
   const { tokens: theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { sharedHeaderScrollY } = useInGameHeaderScroll();
@@ -268,7 +268,7 @@ export default function InGameCommentsPanel({
       }
 
       try {
-        const rows = await getGameComments(mode, gameId, COMMENTS_LIMIT);
+        const rows = await getGameComments(mode, gameId, COMMENTS_LIMIT, proLeague);
         const normalized = normalizeComments(rows);
         const previousLastId = commentsRef.current[commentsRef.current.length - 1]?.id ?? null;
         const nextLastId = normalized[normalized.length - 1]?.id ?? null;
@@ -291,7 +291,7 @@ export default function InGameCommentsPanel({
         }
       }
     },
-    [applyComments, gameId],
+    [applyComments, gameId, mode, proLeague],
   );
 
   useEffect(() => {
@@ -383,7 +383,7 @@ export default function InGameCommentsPanel({
       const created = await postGameComment(mode, gameId, {
         authorName: trimmedAuthor,
         body: trimmedDraft,
-      });
+      }, proLeague);
       await AsyncStorage.setItem(AUTHOR_STORAGE_KEY, trimmedAuthor);
       const merged = mergeComments(commentsRef.current, [created]);
       applyComments(merged, { shouldScroll: true });
@@ -394,7 +394,7 @@ export default function InGameCommentsPanel({
     } finally {
       setPosting(false);
     }
-  }, [applyComments, gameId, mode, trimmedAuthor, trimmedDraft]);
+  }, [applyComments, gameId, mode, proLeague, trimmedAuthor, trimmedDraft]);
 
   if (!enabled) {
     return null;

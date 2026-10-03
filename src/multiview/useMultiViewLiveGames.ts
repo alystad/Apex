@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useLiveGame } from "@/hooks/useLiveGame";
+
 import { readResourceCache, writeResourceCache } from "@/src/loading/resourceCache";
 import type { MultiViewGameSelection } from "@/src/multiview/multiViewTypes";
 import type { BaseballGameSituation } from "@/src/features/baseball/baseballTypes";
 import { fetchLiveGamePayload } from "@/src/features/basketball/api";
+import type { ProBasketballLeague } from "@/src/features/nba/proBasketballLeague";
 import type { GameMode } from "@/src/mode/gameModeTypes";
 import { useSettingsState } from "@/src/settings/SettingsContext";
 
@@ -301,12 +304,14 @@ function parseSummaryToTileState(
 
 async function fetchSnapshot(
   selection: MultiViewGameSelection,
+  proLeague: ProBasketballLeague,
 ): Promise<MultiViewLiveGameSnapshot> {
-  const cacheKey = `multiview-summary:${selection.key}`;
+  const leagueKey = selection.mode === "nba" ? proLeague : selection.mode;
+  const cacheKey = `multiview-summary:${leagueKey}:${selection.key}`;
   const cached = readResourceCache<SummaryPayload>(cacheKey, MULTI_VIEW_CACHE_TTL_MS);
   const payload =
     cached ??
-    ((await fetchLiveGamePayload(selection.mode, selection.gameId)) as SummaryPayload);
+    ((await fetchLiveGamePayload(selection.mode, selection.gameId, proLeague)) as SummaryPayload);
 
   if (!cached) {
     writeResourceCache(cacheKey, payload);
@@ -316,6 +321,7 @@ async function fetchSnapshot(
 }
 
 export function useMultiViewLiveGames(games: MultiViewGameSelection[]) {
+  const { proLeague } = useLiveGame();
   const [entries, setEntries] = useState<Record<string, MultiViewLiveGameState>>({});
   const inFlightRef = useRef(false);
   const keys = useMemo(() => games.map((game) => game.key), [games]);
@@ -349,7 +355,7 @@ export function useMultiViewLiveGames(games: MultiViewGameSelection[]) {
     const updates = await Promise.all(
       games.map(async (selection) => {
         try {
-          const data = await fetchSnapshot(selection);
+          const data = await fetchSnapshot(selection, proLeague);
           return {
             key: selection.key,
             next: {
@@ -402,7 +408,7 @@ export function useMultiViewLiveGames(games: MultiViewGameSelection[]) {
     }
 
     inFlightRef.current = false;
-  }, [games, keys]);
+  }, [games, keys, proLeague]);
 
   useEffect(() => {
     setEntries((current) => {

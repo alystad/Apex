@@ -20,7 +20,10 @@ import ScreenErrorState from "@/components/loading/ScreenErrorState";
 import FotmobSectionCard from "@/components/FotmobSectionCard";
 import Pill from "@/components/ui/Pill";
 import PlayerRatingGraph from "@/components/ui/PlayerRatingGraph";
-import { PRO_BASKETBALL_LABEL } from "@/src/features/nba/proBasketballLeague";
+import {
+  getProBasketballLeagueConfig,
+  type ProBasketballLeague,
+} from "@/src/features/nba/proBasketballLeague";
 import TabBar, { type TabItem } from "@/components/ui/TabBar";
 import UpcomingGameCard from "@/components/ui/UpcomingGameCard";
 import { useLiveGame } from "@/hooks/useLiveGame";
@@ -186,6 +189,7 @@ function parseScore(value: unknown): number | null {
 
 async function hydrateGameScores(
   mode: GameMode,
+  proLeague: ProBasketballLeague,
   teamId: string,
   games: TeamGame[],
 ): Promise<TeamGame[]> {
@@ -202,7 +206,7 @@ async function hydrateGameScores(
   const resolved = await Promise.all(
     candidates.map(async (game) => {
       try {
-        const payload = (await fetchLiveGamePayload(mode, game.gameId)) as LiveGamePayloadLite;
+        const payload = (await fetchLiveGamePayload(mode, game.gameId, proLeague)) as LiveGamePayloadLite;
         const competitors = payload?.header?.competitions?.[0]?.competitors ?? [];
         if (competitors.length < 2) return null;
 
@@ -288,7 +292,7 @@ export default function TeamProfileScreen() {
     mode?: GameMode;
   }>();
   const router = useRouter();
-  const { setGameId } = useLiveGame();
+  const { proLeague, setGameId } = useLiveGame();
   const { setLastEntrySource } = useMultiView();
   const { state: profileState, setFavoriteTeam } = useProfile();
   const { state: settingsState } = useSettingsState();
@@ -316,8 +320,9 @@ export default function TeamProfileScreen() {
         teamId: teamId ?? "unknown",
         season: DEFAULT_SEASON,
         mode,
+        proLeague: mode === "nba" ? proLeague : undefined,
       }),
-    [mode, teamId],
+    [mode, proLeague, teamId],
   );
   const screenLoading = useScreenLoading(screenKey);
   const isFavoritedTeam = Boolean(teamId && profileState.profile.favoriteTeamId === teamId);
@@ -340,8 +345,8 @@ export default function TeamProfileScreen() {
       }
 
       const selectedSeason = DEFAULT_SEASON;
-      const summaryCacheKey = `team-summary:${mode}:${teamId}:${selectedSeason}`;
-      const gamesCacheKey = `team-games:${mode}:${teamId}:${selectedSeason}`;
+      const summaryCacheKey = `team-summary:${mode === "nba" ? `${mode}:${proLeague}` : mode}:${teamId}:${selectedSeason}`;
+      const gamesCacheKey = `team-games:${mode === "nba" ? `${mode}:${proLeague}` : mode}:${teamId}:${selectedSeason}`;
       const cachedSummary = options?.forceRefresh
         ? null
         : readResourceCache<TeamSummary>(summaryCacheKey, TEAM_CRITICAL_CACHE_TTL_MS);
@@ -375,15 +380,15 @@ export default function TeamProfileScreen() {
 
       try {
         const [summaryData, seasonGames] = await Promise.all([
-          cachedSummary ?? getTeamSummary(mode, teamId, selectedSeason),
+          cachedSummary ?? getTeamSummary(mode, teamId, selectedSeason, proLeague),
           cachedGames
             ? Promise.resolve(cachedGames)
-            : getAllTeamSeasonGames(mode, teamId, selectedSeason),
+            : getAllTeamSeasonGames(mode, teamId, selectedSeason, proLeague),
         ]);
 
         const gamesWithScores = cachedGames
           ? cachedGames
-          : await hydrateGameScores(mode, teamId, seasonGames);
+          : await hydrateGameScores(mode, proLeague, teamId, seasonGames);
 
         writeResourceCache(summaryCacheKey, summaryData);
         writeResourceCache(gamesCacheKey, gamesWithScores);
@@ -406,7 +411,7 @@ export default function TeamProfileScreen() {
         endTask(gamesTask);
       }
     },
-    [endTask, mode, startTask, teamId],
+    [endTask, mode, proLeague, startTask, teamId],
   );
 
   const loadNonCriticalData = useCallback(
@@ -419,7 +424,7 @@ export default function TeamProfileScreen() {
       }
 
       const selectedSeason = DEFAULT_SEASON;
-      const playerCacheKey = `team-player-data:${mode}:${teamId}:${selectedSeason}`;
+      const playerCacheKey = `team-player-data:${mode === "nba" ? `${mode}:${proLeague}` : mode}:${teamId}:${selectedSeason}`;
       const cachedPlayers = options?.forceRefresh
         ? null
         : readResourceCache<TeamPlayerStats[]>(playerCacheKey, TEAM_NON_CRITICAL_CACHE_TTL_MS);
@@ -444,7 +449,7 @@ export default function TeamProfileScreen() {
         const playerData =
           cachedPlayers && !options?.forceRefresh
             ? cachedPlayers
-            : await getTeamPlayerStats(mode, teamId, selectedSeason);
+            : await getTeamPlayerStats(mode, teamId, selectedSeason, proLeague);
 
         writeResourceCache(playerCacheKey, playerData);
 
@@ -464,7 +469,7 @@ export default function TeamProfileScreen() {
         }
       }
     },
-    [endTask, mode, startTask, teamId],
+    [endTask, mode, proLeague, startTask, teamId],
   );
 
   useEffect(() => {
@@ -493,7 +498,7 @@ export default function TeamProfileScreen() {
 
   useEffect(() => {
     setActiveTab("overview");
-  }, [mode, teamId]);
+  }, [mode, proLeague, teamId]);
 
   const upcomingGames = useMemo(() => {
     const real = getUpcomingGames(games);
@@ -860,6 +865,7 @@ export default function TeamProfileScreen() {
                   error={playerDataError}
                   unavailableForMode={nbaRosterUnavailable}
                   isBaseballMode={isBaseballMode}
+                  proLeague={proLeague}
                 />
               </LoadBoundary>
             ) : null}
@@ -1109,6 +1115,7 @@ function RosterTab({
   error,
   unavailableForMode,
   isBaseballMode,
+  proLeague,
 }: {
   players: TeamPlayerStats[];
   sortKey: RosterSortKey;
@@ -1116,6 +1123,7 @@ function RosterTab({
   error: string | null;
   unavailableForMode: boolean;
   isBaseballMode: boolean;
+  proLeague: ProBasketballLeague;
 }) {
   const { tokens: theme } = useAppTheme();
   const styles = useMemo(() => makeRosterStyles(theme), [theme]);
@@ -1146,7 +1154,7 @@ function RosterTab({
         ) : null}
         {!error && unavailableForMode ? (
           <Text style={styles.emptyText}>
-            Roster data is not available for {PRO_BASKETBALL_LABEL} yet.
+            Roster data is not available for {getProBasketballLeagueConfig(proLeague).label} yet.
           </Text>
         ) : null}
         {!error && !unavailableForMode
